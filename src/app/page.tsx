@@ -133,7 +133,6 @@ export default function Home() {
                             <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                           </svg>
                         </div>
-                        {/* eslint-disable-next-line react/no-unescaped-entities */}
                         <p className="text-lg text-gray-700" style={{ fontFamily: 'Roboto, sans-serif' }}>
                           Take our <span style={{ color: '#0A4367', fontWeight: '600' }}>free</span>, science-backed assessment to uncover the hidden metrics limiting your endurance, recovery, and focus.
                         </p>
@@ -184,13 +183,11 @@ export default function Home() {
                           </button>
                           
                           {/* Time estimate fine print */}
-                          {/* eslint-disable-next-line react/no-unescaped-entities */}
                           <p className="text-center text-xs text-gray-500" style={{ fontFamily: 'Roboto, sans-serif' }}>
                             Takes 5-10 minutes on average to complete
                           </p>
                   
                           {/* Subtitle */}
-                          {/* eslint-disable-next-line react/no-unescaped-entities */}
                           <p className="text-center text-sm italic" style={{ color: '#0A4367', fontFamily: 'Roboto, sans-serif', fontSize: '16px', fontWeight: '500', fontStyle: 'italic' }}>
                             Your info will never be shared with anyone. No Credit card required.
                           </p>
@@ -377,11 +374,9 @@ export default function Home() {
               <p className="text-lg leading-relaxed" style={{ color: '#1E1E1E', fontFamily: 'Roboto, sans-serif' }}>
                 The Recal Breath Assessment was created by Anthony Lorubbio after years of working with athletes at altitude and in endurance sports. It measures your breathing performance across five proven tests to give you a complete profile — what we call your Recal Breath Index.
               </p>
-              {/* eslint-disable-next-line react/no-unescaped-entities */}
               <p className="text-lg leading-relaxed" style={{ color: '#1E1E1E', fontFamily: 'Roboto, sans-serif' }}>
                 This isn't just about lung capacity — it's about efficiency, endurance, and mechanics. The results show you where you're strong, where you need work, and which protocols can help you improve.
               </p>
-              {/* eslint-disable-next-line react/no-unescaped-entities */}
               <p className="text-lg leading-relaxed" style={{ color: '#1E1E1E', fontFamily: 'Roboto, sans-serif' }}>
                 Your breathing is one of the most overlooked factors in performance. The Recal Breath Assessment makes it measurable — and actionable.
               </p>
@@ -394,7 +389,6 @@ export default function Home() {
       <footer className="bg-white py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            {/* eslint-disable-next-line react/no-unescaped-entities */}
             <p className="text-sm italic" style={{ color: '#5C6164' }}>
               © 2025 Recal Training. All Rights Reserved.
             </p>
