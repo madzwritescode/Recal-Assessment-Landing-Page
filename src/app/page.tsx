@@ -49,8 +49,10 @@ export default function Home() {
 
   // Social proof messages with names and genders
   const socialProofData = [
-    { name: "Claire", gender: "female", message: "Claire&apos;s RBI uncovered they weren&apos;t using the lower regions of their lungs at all - which limited their O2 intake." },
-    { name: "David", gender: "male", message: "David&apos;s RBI Score helped them realize that they were over breathing - the reason they felt gassed on long hikes." },
+    // eslint-disable-next-line react/no-unescaped-entities
+    { name: "Claire", gender: "female", message: "Claire's RBI uncovered they weren't using the lower regions of their lungs at all - which limited their O2 intake." },
+    // eslint-disable-next-line react/no-unescaped-entities
+    { name: "David", gender: "male", message: "David's RBI Score helped them realize that they were over breathing - the reason they felt gassed on long hikes." },
     { name: "Mark", gender: "male", message: "Mark now knows what to work on before their Denali expedition: Nasal Breathing & CO2 tolerance." },
     { name: "Ravi", gender: "male", message: "Ravi now knows which breathwork drills to prioritize for his Kilimanjaro climb." },
     { name: "Jan", gender: "male", message: "Jan learned his LOM score is poor and now has a training protocol to help him get more O2 in his system." },
@@ -374,8 +376,9 @@ export default function Home() {
               <p className="text-lg leading-relaxed" style={{ color: '#1E1E1E', fontFamily: 'Roboto, sans-serif' }}>
                 The Recal Breath Assessment was created by Anthony Lorubbio after years of working with athletes at altitude and in endurance sports. It measures your breathing performance across five proven tests to give you a complete profile — what we call your Recal Breath Index.
               </p>
+              // eslint-disable-next-line react/no-unescaped-entities
               <p className="text-lg leading-relaxed" style={{ color: '#1E1E1E', fontFamily: 'Roboto, sans-serif' }}>
-                This isn&apos;t just about lung capacity — it&apos;s about efficiency, endurance, and mechanics. The results show you where you&apos;re strong, where you need work, and which protocols can help you improve.
+                This isn't just about lung capacity — it's about efficiency, endurance, and mechanics. The results show you where you're strong, where you need work, and which protocols can help you improve.
               </p>
               <p className="text-lg leading-relaxed" style={{ color: '#1E1E1E', fontFamily: 'Roboto, sans-serif' }}>
                 Your breathing is one of the most overlooked factors in performance. The Recal Breath Assessment makes it measurable — and actionable.
