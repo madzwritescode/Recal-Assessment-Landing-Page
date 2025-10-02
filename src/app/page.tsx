@@ -93,6 +93,32 @@ export default function Home() {
     }));
   };
 
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Google Form URL - using the pre-filled version
+    const googleFormUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfdvHwTAuYDUZrqKntNaIcZbNM_RPothRiZgcMbwFPeb8Mx0A/viewform';
+    
+    // Create URL with pre-filled data
+    const url = new URL(googleFormUrl);
+    
+    // Add form data as URL parameters for pre-filling
+    // Google Forms uses entry IDs that can be found in the form's HTML source
+    // For now, we'll use generic entry IDs that are commonly used
+    if (formData.firstName) {
+      url.searchParams.append('entry.2005620554', formData.firstName);
+    }
+    if (formData.lastName) {
+      url.searchParams.append('entry.1045781291', formData.lastName);
+    }
+    if (formData.email) {
+      url.searchParams.append('entry.1065046570', formData.email);
+    }
+    
+    // Open Google Form in new tab
+    window.open(url.toString(), '_blank');
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header - Dark Blue Background */}
@@ -140,7 +166,7 @@ export default function Home() {
               
               {/* Hero Form Container */}
               <div className="bg-white rounded-xl border-2 p-3 shadow-lg" style={{ borderColor: '#0A4367' }}>
-                        <div className="space-y-3">
+                        <form onSubmit={handleFormSubmit} className="space-y-3">
                           {/* Name Row */}
                           <div className="grid grid-cols-2 gap-3">
                             <input
@@ -176,6 +202,7 @@ export default function Home() {
                   
                           {/* CTA Button */}
                           <button
+                            type="submit"
                             className="w-full py-3 px-6 rounded-lg font-semibold text-white shadow-lg hover:opacity-90 transition-opacity"
                             style={{ backgroundColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '45px' }}
                           >
@@ -191,7 +218,7 @@ export default function Home() {
                           <p className="text-center text-sm italic" style={{ color: '#0A4367', fontFamily: 'Roboto, sans-serif', fontSize: '16px', fontWeight: '500', fontStyle: 'italic' }}>
                             Your info will never be shared with anyone. No Credit card required.
                           </p>
-                </div>
+                        </form>
               </div>
             </div>
             
