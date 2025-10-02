@@ -49,9 +49,7 @@ export default function Home() {
 
   // Social proof messages with names and genders
   const socialProofData = [
-    // eslint-disable-next-line react/no-unescaped-entities
     { name: "Claire", gender: "female", message: "Claire's RBI uncovered they weren't using the lower regions of their lungs at all - which limited their O2 intake." },
-    // eslint-disable-next-line react/no-unescaped-entities
     { name: "David", gender: "male", message: "David's RBI Score helped them realize that they were over breathing - the reason they felt gassed on long hikes." },
     { name: "Mark", gender: "male", message: "Mark now knows what to work on before their Denali expedition: Nasal Breathing & CO2 tolerance." },
     { name: "Ravi", gender: "male", message: "Ravi now knows which breathwork drills to prioritize for his Kilimanjaro climb." },
@@ -380,6 +378,7 @@ export default function Home() {
               <p className="text-lg leading-relaxed" style={{ color: '#1E1E1E', fontFamily: 'Roboto, sans-serif' }}>
                 This isn't just about lung capacity — it's about efficiency, endurance, and mechanics. The results show you where you're strong, where you need work, and which protocols can help you improve.
               </p>
+              // eslint-disable-next-line react/no-unescaped-entities
               <p className="text-lg leading-relaxed" style={{ color: '#1E1E1E', fontFamily: 'Roboto, sans-serif' }}>
                 Your breathing is one of the most overlooked factors in performance. The Recal Breath Assessment makes it measurable — and actionable.
               </p>
