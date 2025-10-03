@@ -1,3 +1,14 @@
+// Declare the gtag function on the window interface
+declare global {
+  interface Window {
+    gtag: (
+      event: string,
+      action: string,
+      params: { [key: string]: any }
+    ) => void;
+  }
+}
+
 export const GA_TRACKING_ID = process.env.NEXT_PUBLIC_GA_ID;
 
 // https://developers.google.com/analytics/devguides/collection/gtagjs/events
