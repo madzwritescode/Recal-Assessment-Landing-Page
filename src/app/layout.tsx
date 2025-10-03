@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Recal - Landing Page",
   description: "Modern landing page built with Next.js and Tailwind CSS",
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
