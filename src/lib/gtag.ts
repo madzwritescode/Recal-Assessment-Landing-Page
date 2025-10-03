@@ -4,7 +4,7 @@ declare global {
     gtag: (
       event: string,
       action: string,
-      params: { [key: string]: any }
+      params: { [key: string]: string | number | boolean }
     ) => void;
   }
 }
