@@ -14,11 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Recal - Landing Page",
-  description: "Modern landing page built with Next.js and Tailwind CSS",
-  icons: {
-    icon: '/favicon.ico',
-  },
+  title: "Recal Breath Assessment - Find Your Performance Bottleneck",
+  description: "Take our free, science-backed breath assessment to uncover hidden metrics limiting your endurance, recovery, and focus. Get your personalized Recal Breath Index in 5 minutes.",
 };
 
 export default function RootLayout({
