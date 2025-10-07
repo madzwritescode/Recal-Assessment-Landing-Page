@@ -113,15 +113,15 @@ export default function Home() {
     
     // Add form data as URL parameters for pre-filling
     // Google Forms uses entry IDs that can be found in the form's HTML source
-    // For now, we'll use generic entry IDs that are commonly used
+    // Updated with correct entry IDs from the actual Google Form
     if (formData.firstName) {
-      url.searchParams.append('entry.2005620554', formData.firstName);
+      url.searchParams.append('entry.1328606392', formData.firstName);
     }
     if (formData.lastName) {
-      url.searchParams.append('entry.1045781291', formData.lastName);
+      url.searchParams.append('entry.343152274', formData.lastName);
     }
     if (formData.email) {
-      url.searchParams.append('entry.1065046570', formData.email);
+      url.searchParams.append('entry.1362361142', formData.email);
     }
     
     // Open Google Form in new tab
