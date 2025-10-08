@@ -4,6 +4,79 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import * as gtag from '@/lib/gtag';
 
+// Gender detection based on common names
+const detectGender = (firstName: string): 'male' | 'female' | 'neutral' => {
+  const maleNames = [
+    'david', 'mark', 'ravi', 'jan', 'john', 'michael', 'james', 'robert', 'william', 'richard',
+    'charles', 'thomas', 'christopher', 'daniel', 'matthew', 'anthony', 'donald', 'steven',
+    'paul', 'andrew', 'joshua', 'kenneth', 'kevin', 'brian', 'george', 'edward', 'ronald',
+    'timothy', 'jason', 'jeffrey', 'ryan', 'jacob', 'gary', 'nicholas', 'eric', 'jonathan',
+    'stephen', 'larry', 'justin', 'scott', 'brandon', 'benjamin', 'samuel', 'gregory',
+    'alexander', 'patrick', 'jack', 'dennis', 'jerry', 'tyler', 'aaron', 'jose', 'henry',
+    'douglas', 'adam', 'peter', 'nathan', 'zachary', 'kyle', 'walter', 'harold', 'carl',
+    'arthur', 'gerald', 'roger', 'keith', 'jeremy', 'lawrence', 'sean', 'christian',
+    'ethan', 'austin', 'joe', 'albert', 'jesse', 'willie', 'billy', 'bryan', 'bruce',
+    'noah', 'jordan', 'dylan', 'alan', 'ralph', 'gabriel', 'roy', 'juan', 'wayne',
+    'eugene', 'louis', 'philip', 'bobby', 'johnny', 'bradley', 'kenneth', 'raymond'
+  ];
+  
+  const femaleNames = [
+    'claire', 'mary', 'patricia', 'jennifer', 'linda', 'elizabeth', 'barbara', 'susan',
+    'jessica', 'sarah', 'karen', 'nancy', 'lisa', 'betty', 'helen', 'sandra', 'donna',
+    'carol', 'ruth', 'sharon', 'michelle', 'laura', 'sarah', 'kimberly', 'deborah',
+    'dorothy', 'lisa', 'nancy', 'karen', 'betty', 'helen', 'sandra', 'donna', 'carol',
+    'ruth', 'sharon', 'michelle', 'laura', 'sarah', 'kimberly', 'deborah', 'dorothy',
+    'amy', 'angela', 'brenda', 'emma', 'olivia', 'cynthia', 'marie', 'janet', 'catherine',
+    'frances', 'christine', 'samantha', 'debra', 'rachel', 'carolyn', 'janet', 'virginia',
+    'maria', 'heather', 'diane', 'julie', 'joyce', 'victoria', 'kelly', 'christina',
+    'joan', 'evelyn', 'judith', 'megan', 'cheryl', 'andrea', 'hannah', 'jacqueline',
+    'martha', 'gloria', 'teresa', 'sara', 'janice', 'julia', 'marie', 'madison', 'grace',
+    'judy', 'theresa', 'beverly', 'denise', 'marilyn', 'amanda', 'stephanie', 'carolyn',
+    'catherine', 'frances', 'christine', 'samantha', 'debra', 'rachel', 'carolyn',
+    'janet', 'virginia', 'maria', 'heather', 'diane', 'julie', 'joyce', 'victoria'
+  ];
+  
+  const name = firstName.toLowerCase().trim();
+  
+  if (maleNames.includes(name)) return 'male';
+  if (femaleNames.includes(name)) return 'female';
+  return 'neutral'; // For unisex names or unknown names
+};
+
+// Generate testimonial message based on name and gender
+const generateTestimonialMessage = (firstName: string, gender: string) => {
+  const pronoun = gender === 'female' ? 'her' : gender === 'male' ? 'his' : 'their';
+  const possessive = gender === 'female' ? 'her' : gender === 'male' ? 'his' : 'their';
+  
+  // Message templates that work well with real names (with bold names)
+  const messageTemplates = [
+    `**${firstName}** just discovered their RBI score and uncovered breathing patterns that were limiting their performance.`,
+    `**${firstName}** completed the Recal Breath Assessment and now knows exactly what to work on for their next challenge.`,
+    `**${firstName}** found out their breathing efficiency score and has a personalized plan to improve their endurance.`,
+    `**${firstName}** took the assessment and discovered hidden factors affecting their recovery and focus.`,
+    `**${firstName}** just learned their breathing profile and now has targeted exercises to boost their performance.`,
+    `**${firstName}** completed the breath assessment and uncovered the key metrics limiting their potential.`
+  ];
+  
+  // Randomly select a template
+  return messageTemplates[Math.floor(Math.random() * messageTemplates.length)];
+};
+
+// Function to fetch latest signups from our API
+const fetchLatestSignups = async () => {
+  try {
+    const response = await fetch('/api/latest-signups');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    return { names: data.names || [], totalCount: data.totalCount || 0 };
+  } catch (error) {
+    console.error('Error fetching latest signups:', error);
+    return { names: [], totalCount: 0 };
+  }
+};
+
 // Partner logos data
 const partnerLogos = [
   "360 Expeditions.svg",
@@ -48,18 +121,62 @@ export default function Home() {
     email: ''
   });
 
-  // Social proof messages with names and genders
-  const socialProofData = [
-    { name: "Claire", gender: "female", message: "Claire's RBI uncovered they weren't using the lower regions of their lungs at all - which limited their O2 intake." },
-    { name: "David", gender: "male", message: "David's RBI Score helped them realize that they were over breathing - the reason they felt gassed on long hikes." },
-    { name: "Mark", gender: "male", message: "Mark now knows what to work on before their Denali expedition: Nasal Breathing & CO2 tolerance." },
-    { name: "Ravi", gender: "male", message: "Ravi now knows which breathwork drills to prioritize for his Kilimanjaro climb." },
-    { name: "Jan", gender: "male", message: "Jan learned his LOM score is poor and now has a training protocol to help him get more O2 in his system." },
+  // Fallback social proof messages (used when live data is unavailable)
+  const fallbackSocialProofData = [
+    { name: "Claire", gender: "female", message: "Claire just discovered their RBI score and uncovered breathing patterns that were limiting their performance." },
+    { name: "David", gender: "male", message: "David completed the Recal Breath Assessment and now knows exactly what to work on for their next challenge." },
+    { name: "Mark", gender: "male", message: "Mark found out their breathing efficiency score and has a personalized plan to improve their endurance." },
+    { name: "Ravi", gender: "male", message: "Ravi took the assessment and discovered hidden factors affecting their recovery and focus." },
+    { name: "Jan", gender: "male", message: "Jan just learned their breathing profile and now has targeted exercises to boost their performance." },
     { name: "", gender: "neutral", message: "32 people have taken the Recal Breath Assessment so far..." }
   ];
 
+  const [socialProofData, setSocialProofData] = useState(fallbackSocialProofData);
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [peopleCount, setPeopleCount] = useState(32);
+  const [isLiveData, setIsLiveData] = useState(false);
+  const [latestNames, setLatestNames] = useState<string[]>([]);
+
+  // Fetch live data on component mount and periodically
+  useEffect(() => {
+    const fetchData = async () => {
+      const { names, totalCount } = await fetchLatestSignups();
+      if (names && names.length > 0) {
+        setLatestNames(names);
+        setIsLiveData(true);
+        setPeopleCount(totalCount); // Use total count, not just the 5 names
+        
+        // Create testimonials from the real names
+        const testimonials = names.map((fullName: string) => {
+          const firstName = fullName.split(' ')[0] || 'Someone';
+          const gender = detectGender(firstName);
+          const message = generateTestimonialMessage(firstName, gender);
+          
+          return {
+            name: firstName,
+            gender,
+            message
+          };
+        });
+        
+        // Add the count message with total count
+        testimonials.push({
+          name: "",
+          gender: "neutral",
+          message: `**${totalCount}** people have taken the Recal Breath Assessment so far...`
+        });
+        
+        setSocialProofData(testimonials);
+      }
+    };
+
+    // Fetch immediately
+    fetchData();
+
+    // Then fetch every 2 minutes to keep data fresh
+    const dataInterval = setInterval(fetchData, 120000);
+    return () => clearInterval(dataInterval);
+  }, []);
 
   // Cycle through messages every 6 seconds (slower for better readability)
   useEffect(() => {
@@ -69,21 +186,35 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [socialProofData.length]);
 
-  // Increment people count slowly (simulate real growth)
+  // Increment people count slowly (only for fallback data)
   useEffect(() => {
-    const countInterval = setInterval(() => {
-      setPeopleCount(prev => prev + 1);
-    }, 300000); {/* Every 5 minutes */}
-    return () => clearInterval(countInterval);
-  }, []);
+    if (!isLiveData) {
+      const countInterval = setInterval(() => {
+        setPeopleCount(prev => prev + 1);
+      }, 300000); // Every 5 minutes
+      return () => clearInterval(countInterval);
+    }
+  }, [isLiveData]);
 
-  // Get current message with updated count
+  // Get current message with updated count and render bold text
   const getCurrentMessage = () => {
     const current = socialProofData[currentMessageIndex];
+    let message = current.message;
+    
     if (current.message.includes("people have taken")) {
-      return `${peopleCount} people have taken the Recal Breath Assessment so far...`;
+      message = `**${peopleCount}** people have taken the Recal Breath Assessment so far...`;
     }
-    return current.message;
+    
+    // Convert markdown bold to HTML
+    return message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  };
+
+  // Add a visual indicator for live data
+  const getStatusIndicator = () => {
+    if (isLiveData) {
+      return <div className="w-2 h-2 rounded-full mt-2 flex-shrink-0 bg-green-500 animate-pulse" style={{ animation: 'pulse 2s infinite' }}></div>;
+    }
+    return <div className="w-2 h-2 rounded-full mt-2 flex-shrink-0 bg-yellow-500 animate-pulse" style={{ animation: 'pulse 2s infinite' }}></div>;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -247,10 +378,12 @@ export default function Home() {
                       {/* Social Proof Widget */}
                       <div className="w-full max-w-sm bg-white border border-gray-200 rounded-lg p-4 shadow-sm h-24 flex items-center">
                         <div className="flex items-start space-x-3 w-full">
-                          <div className="w-2 h-2 rounded-full mt-2 flex-shrink-0 bg-green-500 animate-pulse" style={{ animation: 'pulse 2s infinite' }}></div>
-                          <p className="text-sm text-gray-600 leading-relaxed transition-all duration-500 overflow-hidden" style={{ fontFamily: 'Roboto, sans-serif' }}>
-                            {getCurrentMessage()}
-                          </p>
+                          {getStatusIndicator()}
+                          <p 
+                            className="text-sm text-gray-600 leading-relaxed transition-all duration-500 overflow-hidden" 
+                            style={{ fontFamily: 'Roboto, sans-serif' }}
+                            dangerouslySetInnerHTML={{ __html: getCurrentMessage() }}
+                          />
                         </div>
                       </div>
                     </div>
