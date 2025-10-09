@@ -296,7 +296,7 @@ export default function Home() {
     }));
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Track the CTA button click
@@ -306,6 +306,9 @@ export default function Home() {
       label: 'Hero Form CTA',
       value: 1,
     });
+    
+    // Record the landing page signup (async, don't wait for it)
+    recordLandingPageSignup();
     
     // Google Form URL - using the pre-filled version
     const googleFormUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfdvHwTAuYDUZrqKntNaIcZbNM_RPothRiZgcMbwFPeb8Mx0A/viewform';
@@ -328,6 +331,31 @@ export default function Home() {
     
     // Open Google Form in new tab
     window.open(url.toString(), '_blank');
+  };
+
+  // Function to record landing page signup
+  const recordLandingPageSignup = async () => {
+    try {
+      const response = await fetch('/api/record-landing-signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+        }),
+      });
+
+      if (response.ok) {
+        console.log('Landing page signup recorded successfully');
+      } else {
+        console.error('Failed to record landing page signup');
+      }
+    } catch (error) {
+      console.error('Error recording landing page signup:', error);
+    }
   };
 
   return (

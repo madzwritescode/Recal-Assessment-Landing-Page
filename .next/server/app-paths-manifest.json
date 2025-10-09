@@ -1,5 +1,5 @@
 {
+  "/api/record-landing-signup/route": "app/api/record-landing-signup/route.js",
   "/api/latest-signups/route": "app/api/latest-signups/route.js",
-  "/favicon.ico/route": "app/favicon.ico/route.js",
   "/page": "app/page.js"
 }
