@@ -17,7 +17,38 @@ const detectGender = (firstName: string): 'male' | 'female' | 'neutral' => {
     'arthur', 'gerald', 'roger', 'keith', 'jeremy', 'lawrence', 'sean', 'christian',
     'ethan', 'austin', 'joe', 'albert', 'jesse', 'willie', 'billy', 'bryan', 'bruce',
     'noah', 'jordan', 'dylan', 'alan', 'ralph', 'gabriel', 'roy', 'juan', 'wayne',
-    'eugene', 'louis', 'philip', 'bobby', 'johnny', 'bradley', 'kenneth', 'raymond'
+    'eugene', 'louis', 'philip', 'bobby', 'johnny', 'bradley', 'kenneth', 'raymond',
+    // Popular American male names
+    'martin', 'mason', 'logan', 'owen', 'sebastian', 'wyatt', 'grayson', 'leo', 'jayden',
+    'lincoln', 'hudson', 'elijah', 'lucas', 'aiden', 'carter', 'jackson', 'mateo', 'michael',
+    'gabriel', 'daniel', 'anthony', 'samuel', 'henry', 'theodore', 'joseph', 'luke', 'jaxon',
+    'julian', 'levi', 'isaac', 'eli', 'landon', 'connor', 'cayden', 'carson', 'robert', 'angel',
+    'maverick', 'rowan', 'adrian', 'miles', 'axel', 'hunter', 'brayden', 'nolan', 'dominic',
+    'colton', 'brody', 'asher', 'ezra', 'bentley', 'sawyer', 'kaiden', 'blake', 'ryder',
+    'bennett', 'weston', 'kingston', 'ian', 'cooper', 'easton', 'chase', 'nathaniel', 'caleb',
+    'ryan', 'elias', 'charlie', 'josiah', 'caleb', 'colton', 'brayden', 'nolan', 'asher',
+    'grayson', 'ezra', 'bentley', 'sawyer', 'kaiden', 'blake', 'ryder', 'bennett', 'weston',
+    'kingston', 'ian', 'cooper', 'easton', 'chase', 'nathaniel', 'elias', 'josiah', 'caleb',
+    // Additional male names
+    'antonio', 'carlos', 'miguel', 'luis', 'manuel', 'francisco', 'jesus', 'rafael', 'fernando',
+    'mario', 'eduardo', 'ricardo', 'antonio', 'alejandro', 'daniel', 'sergio', 'oscar', 'leonardo',
+    'vicente', 'gustavo', 'ramon', 'raul', 'ivan', 'cesar', 'ruben', 'hugo', 'enrique',
+    'francisco', 'cristian', 'marcos', 'pablo', 'jorge', 'armando', 'gerardo', 'esteban',
+    'sebastian', 'martin', 'felipe', 'alberto', 'diego', 'lorenzo', 'marco', 'ignacio',
+    'adrian', 'camilo', 'santiago', 'nicolas', 'julian', 'andres', 'cristopher', 'cristian',
+    'simon', 'leonardo', 'javier', 'carlos', 'fernando', 'diego', 'santiago', 'matias',
+    'emmanuel', 'maximiliano', 'rodrigo', 'felipe', 'sebastian', 'daniel', 'david', 'jose',
+    'antonio', 'juan', 'francisco', 'manuel', 'pedro', 'alejandro', 'rafael', 'jorge',
+    'miguel', 'alberto', 'carlos', 'luis', 'pablo', 'javier', 'antonio', 'diego',
+    // International names
+    'ahmed', 'mohammed', 'ali', 'hassan', 'omar', 'ibrahim', 'youssef', 'khaled', 'mohamed',
+    'abdul', 'muhammad', 'abdullah', 'salman', 'tariq', 'khalid', 'umar', 'usman', 'farid',
+    'chen', 'wei', 'ming', 'li', 'zhang', 'wang', 'liu', 'chen', 'yang', 'huang', 'zhao',
+    'wu', 'zhou', 'xu', 'ma', 'lu', 'sun', 'gao', 'lin', 'he', 'guo', 'zhu', 'cai',
+    'hideo', 'takeshi', 'kenji', 'hiroshi', 'masahiro', 'akira', 'taro', 'yuki', 'daichi',
+    'ryo', 'shinji', 'kenta', 'satoshi', 'naoki', 'tomohiro', 'kazuki', 'daisuke', 'sho',
+    'vikram', 'raj', 'arjun', 'kumar', 'suresh', 'ramesh', 'rajesh', 'deepak', 'sanjay',
+    'amit', 'vishal', 'nitin', 'manish', 'rohit', 'sachin', 'pradeep', 'sunil', 'anil'
   ];
   
   const femaleNames = [
@@ -33,7 +64,37 @@ const detectGender = (firstName: string): 'male' | 'female' | 'neutral' => {
     'martha', 'gloria', 'teresa', 'sara', 'janice', 'julia', 'marie', 'madison', 'grace',
     'judy', 'theresa', 'beverly', 'denise', 'marilyn', 'amanda', 'stephanie', 'carolyn',
     'catherine', 'frances', 'christine', 'samantha', 'debra', 'rachel', 'carolyn',
-    'janet', 'virginia', 'maria', 'heather', 'diane', 'julie', 'joyce', 'victoria'
+    'janet', 'virginia', 'maria', 'heather', 'diane', 'julie', 'joyce', 'victoria',
+    // Popular American female names
+    'ava', 'isabella', 'sophia', 'charlotte', 'amelia', 'mia', 'harper', 'evelyn', 'abigail',
+    'emily', 'elizabeth', 'mila', 'ella', 'avery', 'sofia', 'camila', 'aria', 'scarlett',
+    'victoria', 'madison', 'luna', 'grace', 'chloe', 'penelope', 'layla', 'riley', 'zoey',
+    'nora', 'lily', 'eleanor', 'hannah', 'lillian', 'addison', 'aubrey', 'ellie', 'stella',
+    'natalie', 'zoe', 'leah', 'hazel', 'violet', 'aurora', 'savannah', 'audrey', 'brooklyn',
+    'bella', 'claire', 'skylar', 'lucy', 'paisley', 'everly', 'anna', 'caroline', 'nova',
+    'genesis', 'aaliyah', 'kennedy', 'kinsley', 'allison', 'maya', 'sarah', 'madelyn',
+    'adeline', 'alexa', 'ariel', 'leilani', 'brielle', 'paige', 'adriana', 'willow',
+    'gianna', 'naomi', 'piper', 'ruby', 'serenity', 'sadie', 'hazel', 'ivy', 'nora',
+    'lily', 'eleanor', 'hannah', 'lillian', 'addison', 'aubrey', 'ellie', 'stella',
+    'natalie', 'zoe', 'leah', 'violet', 'aurora', 'savannah', 'audrey', 'brooklyn',
+    'bella', 'claire', 'skylar', 'lucy', 'paisley', 'everly', 'anna', 'caroline', 'nova',
+    // Additional female names
+    'ana', 'rosa', 'carmen', 'isabel', 'lucia', 'dolores', 'pilar', 'concepcion', 'mercedes',
+    'cristina', 'angeles', 'margarita', 'josefa', 'francisca', 'antonia', 'dolores', 'teresa',
+    'josefa', 'rosario', 'mercedes', 'esperanza', 'soledad', 'encarnacion', 'consuelo',
+    'purificacion', 'manuela', 'dolores', 'pilar', 'carmen', 'isabel', 'lucia', 'ana',
+    'rosa', 'cristina', 'angeles', 'margarita', 'francisca', 'antonia', 'rosario',
+    'esperanza', 'soledad', 'encarnacion', 'consuelo', 'purificacion', 'manuela',
+    // International female names
+    'fatima', 'aisha', 'khadija', 'zainab', 'aminah', 'mariam', 'hafsa', 'safiya', 'ramla',
+    'nusayba', 'ruqayya', 'umm', 'sumayya', 'asma', 'khadija', 'aisha', 'fatima', 'mariam',
+    'li', 'wei', 'ming', 'fang', 'jing', 'yan', 'hong', 'mei', 'lan', 'hua', 'ping', 'qin',
+    'xiao', 'ling', 'ying', 'yun', 'xia', 'dan', 'li', 'na', 'qing', 'rui', 'xin', 'yu',
+    'yoko', 'akiko', 'hiroko', 'naoko', 'sachiko', 'yuki', 'emi', 'mika', 'rika', 'saki',
+    'maya', 'yui', 'aoi', 'mai', 'hana', 'kana', 'mio', 'rio', 'sora', 'nana', 'koko',
+    'priya', 'kavita', 'anjali', 'shreya', 'divya', 'neha', 'kiran', 'pooja', 'sneha',
+    'meera', 'ritu', 'sonia', 'nisha', 'rekha', 'usha', 'leela', 'gita', 'radha', 'sita',
+    'anita', 'sunita', 'kavita', 'preeti', 'puja', 'sushma', 'indira', 'geeta', 'lata'
   ];
   
   const name = firstName.toLowerCase().trim();
@@ -43,19 +104,29 @@ const detectGender = (firstName: string): 'male' | 'female' | 'neutral' => {
   return 'neutral'; // For unisex names or unknown names
 };
 
-// Generate testimonial message based on name and gender
+// Generate testimonial message based on name and gender with specific pronouns
 const generateTestimonialMessage = (firstName: string, gender: string) => {
-  const pronoun = gender === 'female' ? 'her' : gender === 'male' ? 'his' : 'their';
-  const possessive = gender === 'female' ? 'her' : gender === 'male' ? 'his' : 'their';
+  // Define gender-specific pronouns
+  const pronouns = {
+    male: { subject: 'he', object: 'him', possessive: 'his', reflexive: 'himself' },
+    female: { subject: 'she', object: 'her', possessive: 'her', reflexive: 'herself' },
+    neutral: { subject: 'they', object: 'them', possessive: 'their', reflexive: 'themselves' }
+  };
   
-  // Message templates that work well with real names (with bold names)
+  const currentPronouns = pronouns[gender as keyof typeof pronouns];
+  
+  // Message templates with gender-specific pronouns
   const messageTemplates = [
-    `**${firstName}** just discovered their RBI score and uncovered breathing patterns that were limiting their performance.`,
-    `**${firstName}** completed the Recal Breath Assessment and now knows exactly what to work on for their next challenge.`,
-    `**${firstName}** found out their breathing efficiency score and has a personalized plan to improve their endurance.`,
-    `**${firstName}** took the assessment and discovered hidden factors affecting their recovery and focus.`,
-    `**${firstName}** just learned their breathing profile and now has targeted exercises to boost their performance.`,
-    `**${firstName}** completed the breath assessment and uncovered the key metrics limiting their potential.`
+    `**${firstName}** just discovered ${currentPronouns.possessive} RBI score and uncovered breathing patterns that were limiting ${currentPronouns.possessive} performance.`,
+    `**${firstName}** completed the Recal Breath Assessment and now knows exactly what to work on for ${currentPronouns.possessive} next challenge.`,
+    `**${firstName}** found out ${currentPronouns.possessive} breathing efficiency score and has a personalized plan to improve ${currentPronouns.possessive} endurance.`,
+    `**${firstName}** took the assessment and discovered hidden factors affecting ${currentPronouns.possessive} recovery and focus.`,
+    `**${firstName}** just learned ${currentPronouns.possessive} breathing profile and now has targeted exercises to boost ${currentPronouns.possessive} performance.`,
+    `**${firstName}** completed the breath assessment and uncovered the key metrics limiting ${currentPronouns.possessive} potential.`,
+    `**${firstName}** discovered ${currentPronouns.possessive} breathing patterns and now has a personalized plan to improve ${currentPronouns.possessive} performance.`,
+    `**${firstName}** learned ${currentPronouns.possessive} LOM score needs work and now has a training protocol to help ${currentPronouns.object} get more O2 in ${currentPronouns.possessive} system.`,
+    `**${firstName}** now knows what to work on before ${currentPronouns.possessive} next expedition: Nasal Breathing & CO2 tolerance.`,
+    `**${firstName}** now knows which breathwork drills to prioritize for ${currentPronouns.possessive} next challenge.`
   ];
   
   // Randomly select a template
@@ -123,12 +194,12 @@ export default function Home() {
 
   // Fallback social proof messages (used when live data is unavailable)
   const fallbackSocialProofData = [
-    { name: "Claire", gender: "female", message: "Claire just discovered their RBI score and uncovered breathing patterns that were limiting their performance." },
-    { name: "David", gender: "male", message: "David completed the Recal Breath Assessment and now knows exactly what to work on for their next challenge." },
-    { name: "Mark", gender: "male", message: "Mark found out their breathing efficiency score and has a personalized plan to improve their endurance." },
-    { name: "Ravi", gender: "male", message: "Ravi took the assessment and discovered hidden factors affecting their recovery and focus." },
-    { name: "Jan", gender: "male", message: "Jan just learned their breathing profile and now has targeted exercises to boost their performance." },
-    { name: "", gender: "neutral", message: "32 people have taken the Recal Breath Assessment so far..." }
+    { name: "Claire", gender: "female", message: "**Claire** just discovered her RBI score and uncovered breathing patterns that were limiting her performance." },
+    { name: "David", gender: "male", message: "**David** completed the Recal Breath Assessment and now knows exactly what to work on for his next challenge." },
+    { name: "Mark", gender: "male", message: "**Mark** found out his breathing efficiency score and has a personalized plan to improve his endurance." },
+    { name: "Ravi", gender: "male", message: "**Ravi** took the assessment and discovered hidden factors affecting his recovery and focus." },
+    { name: "Jan", gender: "male", message: "**Jan** just learned his breathing profile and now has targeted exercises to boost his performance." },
+    { name: "", gender: "neutral", message: "**32** people have taken the Recal Breath Assessment this week." }
   ];
 
   const [socialProofData, setSocialProofData] = useState(fallbackSocialProofData);
@@ -163,7 +234,7 @@ export default function Home() {
         testimonials.push({
           name: "",
           gender: "neutral",
-          message: `**${totalCount}** people have taken the Recal Breath Assessment so far...`
+          message: `**${totalCount}** people have taken the Recal Breath Assessment this week.`
         });
         
         setSocialProofData(testimonials);
@@ -202,7 +273,7 @@ export default function Home() {
     let message = current.message;
     
     if (current.message.includes("people have taken")) {
-      message = `**${peopleCount}** people have taken the Recal Breath Assessment so far...`;
+      message = `**${peopleCount}** people have taken the Recal Breath Assessment this week.`;
     }
     
     // Convert markdown bold to HTML
