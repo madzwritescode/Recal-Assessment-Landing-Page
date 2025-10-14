@@ -104,8 +104,87 @@ const detectGender = (firstName: string): 'male' | 'female' | 'neutral' => {
   return 'neutral'; // For unisex names or unknown names
 };
 
-// Generate testimonial message based on name and gender with specific pronouns
-const generateTestimonialMessage = (firstName: string, gender: string) => {
+// Extract meaningful goal from raw goal text
+const extractGoal = (rawGoal: string): string | null => {
+  if (!rawGoal || rawGoal.trim().length === 0 || rawGoal.trim() === '?' || rawGoal.trim().length < 3) {
+    return null;
+  }
+
+  const goal = rawGoal.toLowerCase().trim();
+  
+  // Extract key expedition/mountain goals
+  if (goal.includes('everest') || goal.includes('base camp')) {
+    return goal.includes('everest') ? 'Everest expedition' : 'Everest Base Camp';
+  }
+  if (goal.includes('aconcagua')) {
+    return 'Aconcagua expedition';
+  }
+  if (goal.includes('kilimanjaro') || goal.includes('kili')) {
+    return 'Kilimanjaro climb';
+  }
+  if (goal.includes('denali')) {
+    return 'Denali expedition';
+  }
+  if (goal.includes('mont blanc') || goal.includes('montblanc')) {
+    return 'Mont Blanc climb';
+  }
+  if (goal.includes('matterhorn')) {
+    return 'Matterhorn climb';
+  }
+  
+  // Extract race/marathon goals
+  if (goal.includes('marathon')) {
+    return 'marathon';
+  }
+  if (goal.includes('ultra') || goal.includes('ultramarathon')) {
+    return 'ultramarathon';
+  }
+  if (goal.includes('ironman') || goal.includes('iron man')) {
+    return 'Ironman triathlon';
+  }
+  if (goal.includes('trail') && goal.includes('race')) {
+    return 'trail race';
+  }
+  
+  // Extract climbing goals
+  if (goal.includes('climb') && goal.includes('mountain')) {
+    return 'mountain climbing';
+  }
+  if (goal.includes('climb') && goal.includes('rock')) {
+    return 'rock climbing';
+  }
+  if (goal.includes('climb') && goal.includes('ice')) {
+    return 'ice climbing';
+  }
+  
+  // Extract general fitness goals
+  if (goal.includes('hiking') || goal.includes('trekking')) {
+    return 'hiking adventures';
+  }
+  if (goal.includes('cycling') || goal.includes('biking')) {
+    return 'cycling';
+  }
+  if (goal.includes('running') && goal.includes('improve')) {
+    return 'running performance';
+  }
+  if (goal.includes('endurance')) {
+    return 'endurance training';
+  }
+  
+  // If goal is too long (>50 chars), extract first meaningful part
+  if (rawGoal.length > 50) {
+    const sentences = rawGoal.split(/[.!?]/);
+    const firstSentence = sentences[0]?.trim();
+    if (firstSentence && firstSentence.length < 50) {
+      return firstSentence;
+    }
+  }
+  
+  return null; // No meaningful goal found
+};
+
+// Generate testimonial message based on name, gender, and goal with specific pronouns
+const generateTestimonialMessage = (firstName: string, gender: string, rawGoal?: string) => {
   // Define gender-specific pronouns
   const pronouns = {
     male: { subject: 'he', object: 'him', possessive: 'his', reflexive: 'himself' },
@@ -115,19 +194,58 @@ const generateTestimonialMessage = (firstName: string, gender: string) => {
   
   const currentPronouns = pronouns[gender as keyof typeof pronouns];
   
-  // Message templates with gender-specific pronouns
-  const messageTemplates = [
-    `**${firstName}** just discovered ${currentPronouns.possessive} RBI score and uncovered breathing patterns that were limiting ${currentPronouns.possessive} performance.`,
-    `**${firstName}** completed the Recal Breath Assessment and now knows exactly what to work on for ${currentPronouns.possessive} next challenge.`,
-    `**${firstName}** found out ${currentPronouns.possessive} breathing efficiency score and has a personalized plan to improve ${currentPronouns.possessive} endurance.`,
-    `**${firstName}** took the assessment and discovered hidden factors affecting ${currentPronouns.possessive} recovery and focus.`,
-    `**${firstName}** just learned ${currentPronouns.possessive} breathing profile and now has targeted exercises to boost ${currentPronouns.possessive} performance.`,
-    `**${firstName}** completed the breath assessment and uncovered the key metrics limiting ${currentPronouns.possessive} potential.`,
-    `**${firstName}** discovered ${currentPronouns.possessive} breathing patterns and now has a personalized plan to improve ${currentPronouns.possessive} performance.`,
-    `**${firstName}** learned ${currentPronouns.possessive} LOM score needs work and now has a training protocol to help ${currentPronouns.object} get more O2 in ${currentPronouns.possessive} system.`,
-    `**${firstName}** now knows what to work on before ${currentPronouns.possessive} next expedition: Nasal Breathing & CO2 tolerance.`,
-    `**${firstName}** now knows which breathwork drills to prioritize for ${currentPronouns.possessive} next challenge.`
-  ];
+  // Extract meaningful goal from raw goal text
+  const extractedGoal = rawGoal ? extractGoal(rawGoal) : null;
+  
+  // Message templates with Anthony's style - specific discoveries and next steps
+  let messageTemplates = [];
+  
+  // If we have a meaningful goal, create goal-focused messages
+  if (extractedGoal) {
+    const goalLower = extractedGoal.toLowerCase();
+    
+    // Check for specific goal types and create targeted messages
+    if (goalLower.includes('expedition') || goalLower.includes('climb') || goalLower.includes('mountain')) {
+      messageTemplates = [
+        `**${firstName}**'s RBI uncovered ${currentPronouns.possessive} breathing patterns and now knows what to work on before ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}** discovered ${currentPronouns.possessive} breathing mechanics and has a clear plan to prepare for ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}** learned ${currentPronouns.possessive} breathing profile and now knows exactly what to focus on for ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}** found out ${currentPronouns.possessive} breathing efficiency and has a protocol to train before ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}**'s RBI revealed ${currentPronouns.possessive} breathing patterns and now has targeted exercises for ${currentPronouns.possessive} ${extractedGoal}.`
+      ];
+    } else if (goalLower.includes('race') || goalLower.includes('marathon') || goalLower.includes('ultra')) {
+      messageTemplates = [
+        `**${firstName}**'s RBI uncovered ${currentPronouns.possessive} breathing patterns and now knows what to work on for ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}** discovered ${currentPronouns.possessive} breathing mechanics and has a clear plan to improve ${currentPronouns.possessive} performance in ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}** learned ${currentPronouns.possessive} breathing profile and now knows exactly what to focus on for ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}** found out ${currentPronouns.possessive} breathing efficiency and has a protocol to train for ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}**'s RBI revealed ${currentPronouns.possessive} breathing patterns and now has targeted exercises for ${currentPronouns.possessive} ${extractedGoal}.`
+      ];
+    } else {
+      // Generic goal-based messages
+      messageTemplates = [
+        `**${firstName}**'s RBI uncovered ${currentPronouns.possessive} breathing patterns and now knows what to work on for ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}** discovered ${currentPronouns.possessive} breathing mechanics and has a clear plan to achieve ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}** learned ${currentPronouns.possessive} breathing profile and now knows exactly what to focus on for ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}** found out ${currentPronouns.possessive} breathing efficiency and has a protocol to train for ${currentPronouns.possessive} ${extractedGoal}.`,
+        `**${firstName}**'s RBI revealed ${currentPronouns.possessive} breathing patterns and now has targeted exercises for ${currentPronouns.possessive} ${extractedGoal}.`
+      ];
+    }
+  } else {
+    // Fallback to Anthony's style general messages when no meaningful goal is found
+    messageTemplates = [
+      `**${firstName}**'s RBI uncovered ${currentPronouns.possessive} breathing patterns and now knows what to work on for ${currentPronouns.possessive} next challenge.`,
+      `**${firstName}** discovered ${currentPronouns.possessive} breathing mechanics and has a clear plan to improve ${currentPronouns.possessive} performance.`,
+      `**${firstName}** learned ${currentPronouns.possessive} breathing profile and now knows exactly what to focus on.`,
+      `**${firstName}** found out ${currentPronouns.possessive} breathing efficiency and has a protocol to train it daily.`,
+      `**${firstName}**'s RBI revealed ${currentPronouns.possessive} breathing patterns and now has targeted exercises to boost ${currentPronouns.possessive} potential.`,
+      `**${firstName}** uncovered ${currentPronouns.possessive} breathing mechanics and now knows which drills to prioritize.`,
+      `**${firstName}** discovered ${currentPronouns.possessive} breathing profile and has a personalized plan to improve ${currentPronouns.possessive} endurance.`,
+      `**${firstName}** learned ${currentPronouns.possessive} breathing efficiency and now has a clear protocol to train it.`,
+      `**${firstName}** found out ${currentPronouns.possessive} breathing patterns and now knows what to work on for ${currentPronouns.possessive} next expedition.`,
+      `**${firstName}**'s RBI gave ${currentPronouns.object} the missing link for why ${currentPronouns.possessive} breathing felt limited.`
+    ];
+  }
   
   // Randomly select a template
   return messageTemplates[Math.floor(Math.random() * messageTemplates.length)];
@@ -141,10 +259,14 @@ const fetchLatestSignups = async () => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
-    return { names: data.names || [], totalCount: data.totalCount || 0 };
+    return { 
+      names: data.names || [], 
+      totalCount: data.totalCount || 0,
+      goals: data.goals || []
+    };
   } catch (error) {
     console.error('Error fetching latest signups:', error);
-    return { names: [], totalCount: 0 };
+    return { names: [], totalCount: 0, goals: [] };
   }
 };
 
@@ -207,21 +329,24 @@ export default function Home() {
   const [peopleCount, setPeopleCount] = useState(32);
   const [isLiveData, setIsLiveData] = useState(false);
   const [latestNames, setLatestNames] = useState<string[]>([]);
+  const [latestGoals, setLatestGoals] = useState<string[]>([]);
 
   // Fetch live data on component mount and periodically
   useEffect(() => {
     const fetchData = async () => {
-      const { names, totalCount } = await fetchLatestSignups();
+      const { names, totalCount, goals } = await fetchLatestSignups();
       if (names && names.length > 0) {
         setLatestNames(names);
+        setLatestGoals(goals);
         setIsLiveData(true);
         setPeopleCount(totalCount); // Use total count, not just the 5 names
         
-        // Create testimonials from the real names
-        const testimonials = names.map((fullName: string) => {
+        // Create testimonials from the real names and goals
+        const testimonials = names.map((fullName: string, index: number) => {
           const firstName = fullName.split(' ')[0] || 'Someone';
           const gender = detectGender(firstName);
-          const message = generateTestimonialMessage(firstName, gender);
+          const goal = goals[index] || ''; // Get corresponding goal
+          const message = generateTestimonialMessage(firstName, gender, goal);
           
           return {
             name: firstName,
