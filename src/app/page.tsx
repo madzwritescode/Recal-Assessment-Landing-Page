@@ -502,9 +502,9 @@ export default function Home() {
       </header>
 
       {/* Hero Section */}
-      <section className="py-8 px-6 sm:px-8 lg:px-12 max-h-[600px]">
-        <div className="max-w-7xl mx-auto h-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start h-full">
+      <section className="py-8 max-h-[600px]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start h-full">
             {/* Left Column - Hero Content with Form */}
             <div className="space-y-6 flex flex-col justify-start h-full">
               {/* H1 Heading */}
