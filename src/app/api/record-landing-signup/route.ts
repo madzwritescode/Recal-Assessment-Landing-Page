@@ -1,6 +1,23 @@
 import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
 
+// CORS headers helper
+function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+}
+
+// Handle CORS preflight requests
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: getCorsHeaders(),
+  });
+}
+
 export async function POST(request: Request) {
   try {
     // Get environment variables
@@ -10,14 +27,22 @@ export async function POST(request: Request) {
 
     if (!clientEmail || !privateKey || !sheetId) {
       console.error('Missing required environment variables');
-      return NextResponse.json({ error: 'Missing environment variables' }, { status: 500 });
+      const response = NextResponse.json({ error: 'Missing environment variables' }, { status: 500 });
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        response.headers.set(key, value);
+      });
+      return response;
     }
 
     // Parse request body
     const { firstName, lastName, email } = await request.json();
 
     if (!firstName || !email) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      const response = NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        response.headers.set(key, value);
+      });
+      return response;
     }
 
     // Create JWT auth client
@@ -43,11 +68,19 @@ export async function POST(request: Request) {
       }
     });
 
-    return NextResponse.json({ success: true });
+    const response = NextResponse.json({ success: true });
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    return response;
 
   } catch (error) {
     console.error('Error recording landing signup:', error);
-    return NextResponse.json({ error: 'Failed to record signup' }, { status: 500 });
+    const response = NextResponse.json({ error: 'Failed to record signup' }, { status: 500 });
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    return response;
   }
 }
 
