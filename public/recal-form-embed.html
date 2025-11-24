@@ -211,11 +211,16 @@
             };
 
             // Configuration - Update these for your deployment
+            // Default GA ID (Recal's main tracking) - use partner's ID if provided, otherwise use default
+            const DEFAULT_GA_ID = 'G-TZ8Y3WV5HP';
             const CONFIG = {
                 // Base URL of your Next.js app (e.g., 'https://yourdomain.com' or 'http://localhost:3000')
                 baseUrl: getBaseUrl(),
-                // Google Analytics tracking ID (optional)
-                gaId: urlParams.get('gaId') || window.RECAL_FORM_CONFIG?.gaId || null,
+                // Google Analytics 4 tracking ID - Company-specific or default
+                // Pass via URL: ?gaId=G-XXXXXXXXXX
+                gaId: urlParams.get('gaId') || window.RECAL_FORM_CONFIG?.gaId || DEFAULT_GA_ID,
+                // Company name for tracking (optional)
+                companyName: urlParams.get('company') || window.RECAL_FORM_CONFIG?.companyName || 'Unknown',
                 // Google Form URL
                 googleFormUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSfdvHwTAuYDUZrqKntNaIcZbNM_RPothRiZgcMbwFPeb8Mx0A/viewform',
                 // Google Form entry IDs
@@ -226,18 +231,68 @@
                 }
             };
 
-            // Initialize Google Analytics if provided
-            if (CONFIG.gaId && typeof window.gtag !== 'undefined') {
-                // GA is already loaded by parent page
+            // Initialize Google Analytics 4
+            function initGA4() {
+                if (!CONFIG.gaId) return;
+                
+                // Check if GA4 is already loaded
+                if (window.gtag && window.dataLayer) {
+                    // GA4 already initialized, just configure this tracking ID
+                    window.gtag('config', CONFIG.gaId);
+                    // Track widget view after GA is ready
+                    setTimeout(() => trackWidgetView(), 100);
+                    return;
+                }
+
+                // Load GA4 script dynamically
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){window.dataLayer.push(arguments);}
+                window.gtag = gtag;
+                window.gtag('js', new Date());
+                window.gtag('config', CONFIG.gaId);
+
+                // Load the gtag.js script
+                const script = document.createElement('script');
+                script.async = true;
+                script.src = 'https://www.googletagmanager.com/gtag/js?id=' + CONFIG.gaId;
+                script.onload = function() {
+                    // Track widget view after GA script loads
+                    trackWidgetView();
+                };
+                document.head.appendChild(script);
             }
 
-            // Track event helper
+            // Track widget view event
+            function trackWidgetView() {
+                if (CONFIG.gaId && typeof window.gtag !== 'undefined') {
+                    window.gtag('event', 'widget_view', {
+                        event_category: 'Engagement',
+                        event_label: 'Form Widget Loaded',
+                        category: 'Engagement',
+                        label: 'Form Widget Loaded',
+                        company_name: CONFIG.companyName,
+                        company: CONFIG.companyName,
+                        value: 1,
+                    });
+                }
+            }
+
+            // Initialize GA4 on load
+            initGA4();
+
+            // Track event helper with GA4-native parameters
             function trackEvent(action, category, label, value) {
                 if (CONFIG.gaId && typeof window.gtag !== 'undefined') {
                     window.gtag('event', action, {
+                        // GA4 custom parameters
+                        category: category,
+                        label: label,
+                        company_name: CONFIG.companyName,
+                        company: CONFIG.companyName,
+                        // Legacy parameters for backward compatibility
                         event_category: category,
                         event_label: label,
-                        value: value || 1,
+                        ...(value !== undefined && { value: value }),
                     });
                 }
             }

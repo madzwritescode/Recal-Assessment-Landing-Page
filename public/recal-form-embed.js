@@ -18,7 +18,10 @@
     // Configuration
     const CONFIG = window.RECAL_FORM_CONFIG || {};
     const BASE_URL = CONFIG.baseUrl || 'https://yourdomain.com';
-    const GA_ID = CONFIG.gaId || null;
+    // Default GA ID (Recal's main tracking) - use partner's ID if provided, otherwise use default
+    const DEFAULT_GA_ID = 'G-TZ8Y3WV5HP';
+    const GA_ID = CONFIG.gaId || DEFAULT_GA_ID;
+    const COMPANY_NAME = CONFIG.companyName || 'Unknown';
     const CONTAINER_ID = CONFIG.containerId || 'recal-form-container';
 
     // Google Form configuration
@@ -167,13 +170,65 @@
         </form>
     `;
 
-    // Track event helper
+    // Initialize Google Analytics 4
+    function initGA4() {
+        if (!GA_ID) return;
+        
+        // Check if GA4 is already loaded
+        if (window.gtag && window.dataLayer) {
+            // GA4 already initialized, just configure this tracking ID
+            window.gtag('config', GA_ID);
+            // Track widget view after GA is ready
+            setTimeout(() => trackWidgetView(), 100);
+            return;
+        }
+
+        // Load GA4 script dynamically
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){window.dataLayer.push(arguments);}
+        window.gtag = gtag;
+        window.gtag('js', new Date());
+        window.gtag('config', GA_ID);
+
+        // Load the gtag.js script
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        script.onload = function() {
+            // Track widget view after GA script loads
+            trackWidgetView();
+        };
+        document.head.appendChild(script);
+    }
+
+    // Track widget view event
+    function trackWidgetView() {
+        if (GA_ID && typeof window.gtag !== 'undefined') {
+            window.gtag('event', 'widget_view', {
+                event_category: 'Engagement',
+                event_label: 'Form Widget Loaded',
+                category: 'Engagement',
+                label: 'Form Widget Loaded',
+                company_name: COMPANY_NAME,
+                company: COMPANY_NAME,
+                value: 1,
+            });
+        }
+    }
+
+    // Track event helper with GA4-native parameters
     function trackEvent(action, category, label, value) {
         if (GA_ID && typeof window.gtag !== 'undefined') {
             window.gtag('event', action, {
+                // GA4 custom parameters
+                category: category,
+                label: label,
+                company_name: COMPANY_NAME,
+                company: COMPANY_NAME,
+                // Legacy parameters for backward compatibility
                 event_category: category,
                 event_label: label,
-                value: value || 1,
+                ...(value !== undefined && { value: value }),
             });
         }
     }
@@ -205,6 +260,9 @@
 
     // Initialize form
     function initForm() {
+        // Initialize GA4 first if needed
+        initGA4();
+
         const container = document.getElementById(CONTAINER_ID);
         if (!container) {
             console.error('Recal Form: Container element not found. Make sure you have a div with id="' + CONTAINER_ID + '"');

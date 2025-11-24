@@ -32,6 +32,25 @@ If you need to configure the base URL for API calls, you can pass it as a query 
 </iframe>
 ```
 
+### With Company-Specific GA4 Tracking
+
+Each company can use their own GA4 Measurement ID for tracking:
+
+```html
+<iframe 
+    src="https://yourdomain.com/recal-form-embed.html?baseUrl=https://yourdomain.com&gaId=G-TZ8Y3WV5HP&company=Mountain%20Madness" 
+    width="100%" 
+    height="400" 
+    frameborder="0"
+    style="border: none; max-width: 500px;">
+</iframe>
+```
+
+**Parameters:**
+- `baseUrl` - Your Next.js app URL (required)
+- `gaId` - Company's GA4 Measurement ID (optional, e.g., `G-TZ8Y3WV5HP`)
+- `company` - Company name for tracking (optional, e.g., `Mountain%20Madness`)
+
 ### Responsive Iframe
 
 For a responsive iframe that adapts to different screen sizes:
@@ -60,7 +79,8 @@ For more control and better integration, use the JavaScript embed script.
 <script>
     window.RECAL_FORM_CONFIG = {
         baseUrl: 'https://yourdomain.com',  // Required: Your Next.js app URL
-        gaId: 'G-XXXXXXXXXX',              // Optional: Google Analytics ID
+        gaId: 'G-TZ8Y3WV5HP',              // Optional: Company's GA4 Measurement ID
+        companyName: 'Mountain Madness',   // Optional: Company name for tracking
         containerId: 'recal-form-container'  // Optional: Custom container ID
     };
 </script>
@@ -93,14 +113,90 @@ The base URL of your Next.js application where the API endpoints are hosted.
 - Example: `'http://localhost:3000'` (for development)
 
 ### `gaId` (Optional)
-Your Google Analytics tracking ID for conversion tracking.
-- Example: `'G-XXXXXXXXXX'`
+Company-specific Google Analytics 4 (GA4) Measurement ID for conversion tracking.
+- Example: `'G-TZ8Y3WV5HP'` (Mountain Madness)
+- Example: `'G-XXXXXXXXXX'` (Another Company)
+- **Each company should use their own GA4 Measurement ID**
 - If not provided, analytics tracking will be skipped
+- GA4 will be automatically loaded when this parameter is provided
+
+### `companyName` (Optional)
+Company name for tracking and analytics segmentation.
+- Example: `'Mountain Madness'`
+- Example: `'Alpine Ascents'`
+- Used in GA4 events as a custom parameter for filtering by company
+- If not provided, defaults to `'Unknown'`
 
 ### `containerId` (Optional)
 The ID of the HTML element where the form should be rendered.
 - Default: `'recal-form-container'`
 - Only used with script-based embed
+
+## Multi-Company GA4 Tracking
+
+Each company can embed the form with their own GA4 Measurement ID for independent tracking.
+
+### Example: Mountain Madness
+
+**Iframe:**
+```html
+<iframe 
+    src="https://yourdomain.com/recal-form-embed.html?baseUrl=https://yourdomain.com&gaId=G-TZ8Y3WV5HP&company=Mountain%20Madness" 
+    width="100%" 
+    height="400" 
+    frameborder="0">
+</iframe>
+```
+
+**Script:**
+```html
+<div id="recal-form-container"></div>
+<script>
+    window.RECAL_FORM_CONFIG = {
+        baseUrl: 'https://yourdomain.com',
+        gaId: 'G-TZ8Y3WV5HP',
+        companyName: 'Mountain Madness'
+    };
+</script>
+<script src="https://yourdomain.com/recal-form-embed.js"></script>
+```
+
+### Example: Alpine Ascents
+
+**Iframe:**
+```html
+<iframe 
+    src="https://yourdomain.com/recal-form-embed.html?baseUrl=https://yourdomain.com&gaId=G-ALPINE12345&company=Alpine%20Ascents" 
+    width="100%" 
+    height="400" 
+    frameborder="0">
+</iframe>
+```
+
+**Script:**
+```html
+<div id="recal-form-container"></div>
+<script>
+    window.RECAL_FORM_CONFIG = {
+        baseUrl: 'https://yourdomain.com',
+        gaId: 'G-ALPINE12345',
+        companyName: 'Alpine Ascents'
+    };
+</script>
+<script src="https://yourdomain.com/recal-form-embed.js"></script>
+```
+
+### GA4 Event Tracking
+
+When a form is submitted, the following GA4 event is tracked:
+- **Event Name**: `start_assessment_click`
+- **Event Parameters**:
+  - `category`: "Conversion"
+  - `label`: "Embedded Form CTA"
+  - `company`: Company name (e.g., "Mountain Madness")
+  - `value`: 1
+
+You can filter and analyze events by company in your GA4 dashboard using the `company` parameter.
 
 ## How It Works
 
@@ -108,7 +204,7 @@ The ID of the HTML element where the form should be rendered.
    - Validates the required fields (First Name and Email)
    - Records the signup to your API endpoint (`/api/record-landing-signup`)
    - Opens the Google Form in a new tab with pre-filled data
-   - Tracks the conversion event (if GA is configured)
+   - Tracks the conversion event to the company's GA4 property (if configured)
 
 2. **API Integration**: The form makes a POST request to:
    - `${baseUrl}/api/record-landing-signup`
