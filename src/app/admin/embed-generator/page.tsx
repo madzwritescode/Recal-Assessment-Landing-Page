@@ -1,19 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function EmbedGenerator() {
   const [companyName, setCompanyName] = useState('');
   const [gaId, setGaId] = useState('');
-  const [baseUrl, setBaseUrl] = useState(
-    typeof window !== 'undefined' 
-      ? window.location.origin 
-      : 'https://yourdomain.com'
-  );
+  const [baseUrl, setBaseUrl] = useState('https://yourdomain.com');
   const [generatedCode, setGeneratedCode] = useState<{
     script: string;
     iframe: string;
   } | null>(null);
+
+  // Set base URL after component mounts (client-side only)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setBaseUrl(window.location.origin);
+    }
+  }, []);
 
   const defaultGaId = 'G-TZ8Y3WV5HP';
 
@@ -24,25 +27,26 @@ export default function EmbedGenerator() {
     }
 
     const finalGaId = gaId.trim() || defaultGaId;
+    const finalBaseUrl = baseUrl.trim() || 'https://yourdomain.com';
     const encodedCompany = encodeURIComponent(companyName.trim());
     const encodedGaId = encodeURIComponent(finalGaId);
-    const encodedBaseUrl = encodeURIComponent(baseUrl.trim());
+    const encodedBaseUrl = encodeURIComponent(finalBaseUrl);
 
     // Generate Script Embed Code
     // Note: Always include gaId (either partner's or default) so tracking works
     const scriptCode = `<div id="recal-form-container"></div>
 <script>
     window.RECAL_FORM_CONFIG = {
-        baseUrl: '${baseUrl.trim()}',
+        baseUrl: '${finalBaseUrl}',
         gaId: '${finalGaId}',
         companyName: '${companyName.trim()}'
     };
 </script>
-<script src="${baseUrl.trim()}/recal-form-embed.js"></script>`;
+<script src="${finalBaseUrl}/recal-form-embed.js"></script>`;
 
     // Generate Iframe Embed Code
     const iframeCode = `<iframe 
-    src="${baseUrl.trim()}/recal-form-embed.html?baseUrl=${encodedBaseUrl}&gaId=${encodedGaId}&company=${encodedCompany}" 
+    src="${finalBaseUrl}/recal-form-embed.html?baseUrl=${encodedBaseUrl}&gaId=${encodedGaId}&company=${encodedCompany}" 
     width="100%" 
     height="400" 
     frameborder="0"
