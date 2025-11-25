@@ -1,4 +1,5 @@
 {
   "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
   "/admin/embed-generator/page": "app/admin/embed-generator/page.js"
 }

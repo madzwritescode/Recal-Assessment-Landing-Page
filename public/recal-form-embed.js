@@ -35,54 +35,49 @@
     // CSS Styles
     const STYLES = `
         <style>
+            .recal-widget-shell {
+                background: linear-gradient(135deg, #f7f8ff, #eef4ff);
+                border-radius: 30px;
+                padding: 6px;
+                border: 2px solid #d9c3ff;
+                box-shadow: 0 15px 45px rgba(133, 96, 169, 0.25);
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
             .recal-form-card {
-                background: white;
+                background: linear-gradient(160deg, #ffffff 0%, #f2f7ff 100%);
+                border-radius: 25px;
+                padding: 24px;
+                box-shadow: 0 25px 55px rgba(12, 48, 82, 0.18);
+            }
+            .recal-brand-header {
+                background: linear-gradient(120deg, #0A4367, #0F5C89 60%, #4A90A4);
                 border-radius: 18px;
-                border: 1px solid rgba(74, 144, 164, 0.35);
-                padding: 20px;
-                box-shadow: 0 30px 60px rgba(10, 67, 103, 0.15);
-                max-width: 100%;
-                width: 100%;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                position: relative;
-                overflow: hidden;
+                padding: 18px 22px;
+                margin-bottom: 20px;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 12px 35px rgba(10, 67, 103, 0.4);
+                color: #ffffff;
             }
-            .recal-form-card::before {
-                content: '';
-                position: absolute;
-                inset: 0;
-                background: radial-gradient(circle at top right, rgba(74, 144, 164, 0.15), transparent 55%);
-                pointer-events: none;
-            }
-            .recal-form-content {
-                position: relative;
-                z-index: 1;
-            }
-            .recal-brand-pill {
-                display: inline-flex;
+            .recal-brand-logo {
+                display: flex;
                 align-items: center;
-                gap: 10px;
-                padding: 8px 14px;
-                border-radius: 999px;
-                background: rgba(10, 67, 103, 0.08);
-                margin-bottom: 12px;
+                gap: 12px;
             }
-            .recal-brand-pill img {
-                height: 28px;
+            .recal-brand-logo img {
+                height: 30px;
                 width: auto;
+                filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.4));
             }
-            .recal-brand-pill span {
+            .recal-brand-logo span {
                 font-size: 13px;
-                font-weight: 600;
-                color: #0A4367;
+                font-weight: 700;
+                letter-spacing: 0.12em;
                 text-transform: uppercase;
-                letter-spacing: 0.08em;
             }
             .recal-tagline {
-                font-size: 14px;
-                color: rgba(10, 67, 103, 0.8);
-                margin-bottom: 18px;
-                font-weight: 500;
+                font-size: 15px;
+                color: rgba(10, 67, 103, 0.82);
+                margin-bottom: 22px;
+                font-weight: 600;
             }
             .recal-form {
                 display: flex;
@@ -96,66 +91,61 @@
             }
             .recal-input {
                 width: 100%;
-                padding: 10px 12px;
-                border: 2px solid #0A4367;
-                border-radius: 8px;
+                padding: 14px 16px;
+                border: 2px solid rgba(8, 63, 107, 0.9);
+                border-radius: 16px;
                 font-size: 16px;
-                height: 43px;
-                font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-                font-style: italic;
-                font-weight: 700;
-                transition: all 0.2s;
+                height: 52px;
+                font-weight: 600;
+                background: rgba(255, 255, 255, 0.92);
+                color: #0A4367;
+                box-shadow: 0 6px 15px rgba(10, 67, 103, 0.08);
+                transition: border-color 0.2s, box-shadow 0.2s;
             }
             .recal-input:focus {
                 outline: none;
-                border-color: #0A4367;
-                box-shadow: 0 0 0 2px rgba(10, 67, 103, 0.2);
+                border-color: #0F5C89;
+                box-shadow: 0 0 0 3px rgba(15, 92, 137, 0.15);
             }
             .recal-input::placeholder {
-                color: #9ca3af;
-                font-weight: 400;
+                color: #9fb3c6;
+                font-weight: 500;
             }
             .recal-button {
                 width: 100%;
-                padding: 12px 24px;
-                background-color: #0A4367;
+                padding: 14px 24px;
+                background: linear-gradient(120deg, #06355C, #0B4D7C);
                 color: white;
                 border: none;
-                border-radius: 8px;
+                border-radius: 18px;
                 font-size: 16px;
-                font-weight: 600;
-                height: 45px;
+                font-weight: 700;
+                height: 54px;
                 cursor: pointer;
-                font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-                font-style: italic;
-                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-                transition: opacity 0.2s;
+                box-shadow: 0 18px 30px rgba(6, 53, 92, 0.35);
+                transition: transform 0.15s ease, box-shadow 0.15s ease;
             }
             .recal-button:hover {
-                opacity: 0.9;
-            }
-            .recal-button:active {
-                opacity: 0.8;
+                transform: translateY(-1px);
+                box-shadow: 0 20px 32px rgba(6, 53, 92, 0.4);
             }
             .recal-button:disabled {
-                opacity: 0.6;
+                opacity: 0.65;
                 cursor: not-allowed;
             }
             .recal-fine-print {
                 text-align: center;
                 font-size: 12px;
-                color: #6b7280;
-                font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                color: #7a8595;
                 margin: 0;
             }
             .recal-subtitle {
                 text-align: center;
                 font-size: 14px;
                 color: #0A4367;
-                font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                font-weight: 500;
+                font-weight: 600;
                 font-style: italic;
-                margin: 0;
+                margin: 4px 0 0;
             }
             .recal-loading {
                 opacity: 0.6;
@@ -171,50 +161,54 @@
 
     // Form HTML
     const FORM_HTML = `
-        <div class="recal-form-card">
-            <div class="recal-form-content">
-                <div class="recal-brand-pill">
-                    <img src="${BASE_URL}/Logo Version A White - Recal_no background_small.png" alt="Recal logo" />
-                    <span>Recal Breath Assessment</span>
+        <div class="recal-widget-shell">
+            <div class="recal-form-card">
+                <div class="recal-brand-header">
+                    <div class="recal-brand-logo">
+                        <img src="${BASE_URL}/assets/recal-embed-logo.png" alt="Recal logo" />
+                        <span>Recal Breath Assessment</span>
+                    </div>
                 </div>
-                <p class="recal-tagline">Instant breathing diagnostics designed for elite performance.</p>
+                <div class="recal-form-content">
+                    <p class="recal-tagline">Instant breathing diagnostics designed for elite performance.</p>
+                    <form id="recalForm" class="recal-form">
+                        <div class="recal-form-row">
+                            <input
+                                type="text"
+                                name="firstName"
+                                id="recalFirstName"
+                                placeholder="First Name"
+                                class="recal-input"
+                                required
+                            />
+                            <input
+                                type="text"
+                                name="lastName"
+                                id="recalLastName"
+                                placeholder="Last Name"
+                                class="recal-input"
+                            />
+                        </div>
+                        <input
+                            type="email"
+                            name="email"
+                            id="recalEmail"
+                            placeholder="Email"
+                            class="recal-input"
+                            required
+                        />
+                        <button type="submit" class="recal-button" id="recalSubmitButton">
+                            Start My Assessment
+                        </button>
+                        <p class="recal-fine-print">
+                            Takes 5-10 minutes on average to complete
+                        </p>
+                        <p class="recal-subtitle">
+                            Your info will never be shared with anyone. No Credit card required.
+                        </p>
+                    </form>
+                </div>
             </div>
-            <form id="recalForm" class="recal-form">
-                <div class="recal-form-row">
-                    <input
-                        type="text"
-                        name="firstName"
-                        id="recalFirstName"
-                        placeholder="First Name"
-                        class="recal-input"
-                        required
-                    />
-                    <input
-                        type="text"
-                        name="lastName"
-                        id="recalLastName"
-                        placeholder="Last Name"
-                        class="recal-input"
-                    />
-                </div>
-                <input
-                    type="email"
-                    name="email"
-                    id="recalEmail"
-                    placeholder="Email"
-                    class="recal-input"
-                    required
-                />
-                <button type="submit" class="recal-button" id="recalSubmitButton">
-                    Start My Assessment
-                </button>
-                <p class="recal-fine-print">
-                    Takes 5-10 minutes on average to complete
-                </p>
-                <p class="recal-subtitle">
-                    Your info will never be shared with anyone. No Credit card required.
-                </p>
-            </form>
         </div>
     `;
 
