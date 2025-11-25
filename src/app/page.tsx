@@ -328,16 +328,11 @@ export default function Home() {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [peopleCount, setPeopleCount] = useState(32);
   const [isLiveData, setIsLiveData] = useState(false);
-  const [latestNames, setLatestNames] = useState<string[]>([]);
-  const [latestGoals, setLatestGoals] = useState<string[]>([]);
-
   // Fetch live data on component mount and periodically
   useEffect(() => {
     const fetchData = async () => {
       const { names, totalCount, goals } = await fetchLatestSignups();
       if (names && names.length > 0) {
-        setLatestNames(names);
-        setLatestGoals(goals);
         setIsLiveData(true);
         setPeopleCount(totalCount); // Use total count, not just the 5 names
         
