@@ -158,11 +158,17 @@ export default function EmbedGenerator() {
                     Copy Code
                   </button>
                 </div>
-                <div className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
-                  <pre className="text-sm whitespace-pre-wrap font-mono">
-                    <code>{generatedCode.script}</code>
-                  </pre>
-                </div>
+                <textarea
+                  value={generatedCode.script}
+                  onChange={(e) =>
+                    setGeneratedCode((prev) =>
+                      prev ? { ...prev, script: e.target.value } : prev
+                    )
+                  }
+                  className="w-full bg-gray-900 text-white font-mono text-sm p-4 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={10}
+                  spellCheck={false}
+                />
                 <p className="mt-2 text-sm text-gray-600">
                   Better integration, more control. Partners paste this code on their website.
                 </p>
@@ -181,11 +187,17 @@ export default function EmbedGenerator() {
                     Copy Code
                   </button>
                 </div>
-                <div className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
-                  <pre className="text-sm whitespace-pre-wrap font-mono">
-                    <code>{generatedCode.iframe}</code>
-                  </pre>
-                </div>
+                <textarea
+                  value={generatedCode.iframe}
+                  onChange={(e) =>
+                    setGeneratedCode((prev) =>
+                      prev ? { ...prev, iframe: e.target.value } : prev
+                    )
+                  }
+                  className="w-full bg-gray-900 text-white font-mono text-sm p-4 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={8}
+                  spellCheck={false}
+                />
                 <p className="mt-2 text-sm text-gray-600">
                   Simple iframe embed. Works on any website without JavaScript configuration.
                 </p>
