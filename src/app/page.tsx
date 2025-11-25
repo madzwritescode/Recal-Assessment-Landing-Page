@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import * as gtag from '@/lib/gtag';
+import DiagnosticModal from "@/components/DiagnosticModal";
 
 // Gender detection based on common names
 const detectGender = (firstName: string): 'male' | 'female' | 'neutral' => {
@@ -308,11 +309,17 @@ const partnerLogos = [
 ];
 
 export default function Home() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: ''
   });
+  const [modalLead, setModalLead] = useState<{
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null>(null);
 
   // Fallback social proof messages (used when live data is unavailable)
   const fallbackSocialProofData = [
@@ -416,69 +423,27 @@ export default function Home() {
     }));
   };
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Track the CTA button click
+
     gtag.event({
-      action: 'start_assessment_click',
+      action: 'start_assessment_modal_open',
       category: 'Conversion',
-      label: 'Hero Form CTA',
+      label: 'Hero Modal CTA',
       value: 1,
     });
-    
-    // Record the landing page signup (async, don't wait for it)
-    recordLandingPageSignup();
-    
-    // Google Form URL - using the pre-filled version
-    const googleFormUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfdvHwTAuYDUZrqKntNaIcZbNM_RPothRiZgcMbwFPeb8Mx0A/viewform';
-    
-    // Create URL with pre-filled data
-    const url = new URL(googleFormUrl);
-    
-    // Add form data as URL parameters for pre-filling
-    // Google Forms uses entry IDs that can be found in the form's HTML source
-    // Updated with correct entry IDs from the actual Google Form
-    if (formData.firstName) {
-      url.searchParams.append('entry.1328606392', formData.firstName);
-    }
-    if (formData.lastName) {
-      url.searchParams.append('entry.343152274', formData.lastName);
-    }
-    if (formData.email) {
-      url.searchParams.append('entry.1362361142', formData.email);
-    }
-    
-    // Open Google Form in new tab
-    window.open(url.toString(), '_blank');
-  };
 
-  // Function to record landing page signup
-  const recordLandingPageSignup = async () => {
-    try {
-      const response = await fetch('/api/record-landing-signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-        }),
-      });
+    setModalLead({
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+    });
 
-      if (response.ok) {
-        console.log('Landing page signup recorded successfully');
-      } else {
-        console.error('Failed to record landing page signup');
-      }
-    } catch (error) {
-      console.error('Error recording landing page signup:', error);
-    }
+    setIsModalOpen(true);
   };
 
   return (
+    <>
     <div className="min-h-screen bg-white">
       {/* Header - Dark Blue Background */}
       <header className="w-full" style={{ backgroundColor: '#0A4367' }}>
@@ -525,59 +490,55 @@ export default function Home() {
               
               {/* Hero Form Container */}
               <div className="bg-white rounded-xl border-2 p-3 shadow-lg" style={{ borderColor: '#4A90A4' }}>
-                        <form onSubmit={handleFormSubmit} className="space-y-3">
-                          {/* Name Row */}
-                          <div className="grid grid-cols-2 gap-3">
-                            <input
-                              type="text"
-                              name="firstName"
-                              placeholder="First Name"
-                              value={formData.firstName}
-                              onChange={handleInputChange}
-                              className="w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
-                              style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '43px' }}
-                            />
-                            <input
-                              type="text"
-                              name="lastName"
-                              placeholder="Last Name"
-                              value={formData.lastName}
-                              onChange={handleInputChange}
-                              className="w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
-                              style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '43px' }}
-                            />
-                          </div>
-
-                          {/* Email Input */}
-                          <input
-                            type="email"
-                            name="email"
-                            placeholder="Email"
-                            value={formData.email}
-                            onChange={handleInputChange}
-                            className="w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
-                            style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '43px' }}
-                          />
-                  
-                          {/* CTA Button */}
-                          <button
-                            type="submit"
-                            className="w-full py-3 px-6 rounded-lg font-semibold text-white shadow-lg hover:opacity-90 transition-opacity"
-                            style={{ backgroundColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '45px' }}
-                          >
-                            Start My Assessment
-                          </button>
-                          
-                          {/* Time estimate fine print */}
-                          <p className="text-center text-xs text-gray-500" style={{ fontFamily: 'Roboto, sans-serif' }}>
-                            Takes 5-10 minutes on average to complete
-                          </p>
-                  
-                          {/* Subtitle */}
-                          <p className="text-center text-[16px] lg:text-sm italic" style={{ color: '#0A4367', fontFamily: 'Roboto, sans-serif', fontWeight: '500', fontStyle: 'italic' }}>
-                            Your info will never be shared with anyone. No Credit card required.
-                          </p>
-                        </form>
+                <form onSubmit={handleFormSubmit} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      name="firstName"
+                      placeholder="First Name"
+                      value={formData.firstName}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
+                      style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '43px' }}
+                      required
+                    />
+                    <input
+                      type="text"
+                      name="lastName"
+                      placeholder="Last Name"
+                      value={formData.lastName}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
+                      style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '43px' }}
+                      required
+                    />
+                  </div>
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="Email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
+                    style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '43px' }}
+                    required
+                  />
+                  <button
+                    type="submit"
+                    id="diagnostic-cta-start"
+                    data-gtm="diagnostic-cta-start"
+                    className="w-full py-3 px-6 rounded-lg font-semibold text-white shadow-lg hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '45px' }}
+                  >
+                    Start My Assessment
+                  </button>
+                  <p className="text-center text-xs text-gray-500">
+                    Takes 5-10 minutes on average to complete
+                  </p>
+                  <p className="text-center text-[16px] lg:text-sm italic" style={{ color: '#0A4367', fontFamily: 'Roboto, sans-serif', fontWeight: '500', fontStyle: 'italic' }}>
+                    Your info will never be shared with anyone. No credit card required.
+                  </p>
+                </form>
               </div>
               
             </div>
@@ -798,5 +759,11 @@ export default function Home() {
         </div>
       </footer>
     </div>
+    <DiagnosticModal
+      isOpen={isModalOpen}
+      onClose={() => setIsModalOpen(false)}
+      initialLead={modalLead}
+    />
+    </>
   );
 }

@@ -1,5 +1,4 @@
 {
-  "/favicon.ico/route": "app/favicon.ico/route.js",
-  "/_not-found/page": "app/_not-found/page.js",
-  "/admin/embed-generator/page": "app/admin/embed-generator/page.js"
+  "/api/latest-signups/route": "app/api/latest-signups/route.js",
+  "/page": "app/page.js"
 }

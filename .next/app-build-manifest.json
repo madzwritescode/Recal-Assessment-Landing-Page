@@ -6,15 +6,15 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/admin/embed-generator/page": [
+    "/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/embed-generator/page.js"
+      "static/chunks/app/page.js"
     ],
-    "/_not-found/page": [
+    "/api/latest-signups/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/_not-found/page.js"
+      "static/chunks/app/api/latest-signups/route.js"
     ]
   }
 }
