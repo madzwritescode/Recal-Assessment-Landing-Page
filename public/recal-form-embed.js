@@ -35,15 +35,54 @@
     // CSS Styles
     const STYLES = `
         <style>
-            .recal-form-container {
+            .recal-form-card {
                 background: white;
-                border-radius: 12px;
-                border: 2px solid #4A90A4;
-                padding: 12px;
-                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+                border-radius: 18px;
+                border: 1px solid rgba(74, 144, 164, 0.35);
+                padding: 20px;
+                box-shadow: 0 30px 60px rgba(10, 67, 103, 0.15);
                 max-width: 100%;
                 width: 100%;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                position: relative;
+                overflow: hidden;
+            }
+            .recal-form-card::before {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: radial-gradient(circle at top right, rgba(74, 144, 164, 0.15), transparent 55%);
+                pointer-events: none;
+            }
+            .recal-form-content {
+                position: relative;
+                z-index: 1;
+            }
+            .recal-brand-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 10px;
+                padding: 8px 14px;
+                border-radius: 999px;
+                background: rgba(10, 67, 103, 0.08);
+                margin-bottom: 12px;
+            }
+            .recal-brand-pill img {
+                height: 28px;
+                width: auto;
+            }
+            .recal-brand-pill span {
+                font-size: 13px;
+                font-weight: 600;
+                color: #0A4367;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+            }
+            .recal-tagline {
+                font-size: 14px;
+                color: rgba(10, 67, 103, 0.8);
+                margin-bottom: 18px;
+                font-weight: 500;
             }
             .recal-form {
                 display: flex;
@@ -132,42 +171,51 @@
 
     // Form HTML
     const FORM_HTML = `
-        <form id="recalForm" class="recal-form">
-            <div class="recal-form-row">
+        <div class="recal-form-card">
+            <div class="recal-form-content">
+                <div class="recal-brand-pill">
+                    <img src="${BASE_URL}/Logo Version A White - Recal_no background_small.png" alt="Recal logo" />
+                    <span>Recal Breath Assessment</span>
+                </div>
+                <p class="recal-tagline">Instant breathing diagnostics designed for elite performance.</p>
+            </div>
+            <form id="recalForm" class="recal-form">
+                <div class="recal-form-row">
+                    <input
+                        type="text"
+                        name="firstName"
+                        id="recalFirstName"
+                        placeholder="First Name"
+                        class="recal-input"
+                        required
+                    />
+                    <input
+                        type="text"
+                        name="lastName"
+                        id="recalLastName"
+                        placeholder="Last Name"
+                        class="recal-input"
+                    />
+                </div>
                 <input
-                    type="text"
-                    name="firstName"
-                    id="recalFirstName"
-                    placeholder="First Name"
+                    type="email"
+                    name="email"
+                    id="recalEmail"
+                    placeholder="Email"
                     class="recal-input"
                     required
                 />
-                <input
-                    type="text"
-                    name="lastName"
-                    id="recalLastName"
-                    placeholder="Last Name"
-                    class="recal-input"
-                />
-            </div>
-            <input
-                type="email"
-                name="email"
-                id="recalEmail"
-                placeholder="Email"
-                class="recal-input"
-                required
-            />
-            <button type="submit" class="recal-button" id="recalSubmitButton">
-                Start My Assessment
-            </button>
-            <p class="recal-fine-print">
-                Takes 5-10 minutes on average to complete
-            </p>
-            <p class="recal-subtitle">
-                Your info will never be shared with anyone. No Credit card required.
-            </p>
-        </form>
+                <button type="submit" class="recal-button" id="recalSubmitButton">
+                    Start My Assessment
+                </button>
+                <p class="recal-fine-print">
+                    Takes 5-10 minutes on average to complete
+                </p>
+                <p class="recal-subtitle">
+                    Your info will never be shared with anyone. No Credit card required.
+                </p>
+            </form>
+        </div>
     `;
 
     // Initialize Google Analytics 4
