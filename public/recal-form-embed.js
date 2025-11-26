@@ -86,6 +86,8 @@
                 color: rgba(10, 67, 103, 0.82);
                 margin-bottom: 22px;
                 font-weight: 600;
+                font-family: 'Rogue Sans Ext', sans-serif;
+                font-style: italic;
             }
             .recal-form {
                 display: flex;
@@ -178,11 +180,11 @@
                 <div class="recal-brand-header">
                     <div class="recal-brand-logo">
                         <img src="${BASE_URL}/assets/recal-embed-logo.png" alt="Recal logo" />
-                        <span>Recal Breath Index</span>
+                        <span style="font-family: 'Rogue Sans Ext', sans-serif;">Recal Breath Index</span>
                     </div>
                 </div>
                 <div class="recal-form-content">
-                    <p class="recal-tagline">Instant breathing diagnostics designed for elite performance.</p>
+                    <p class="recal-tagline">Is Your Breathing Holding You Back? <strong>Find out in 5 minutes.</strong></p>
                     <form id="recalForm" class="recal-form">
                         <div class="recal-form-row">
                             <input
