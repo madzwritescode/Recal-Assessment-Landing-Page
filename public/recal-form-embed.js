@@ -215,6 +215,9 @@
                         <p class="recal-fine-print">
                             Takes 5-10 minutes on average to complete
                         </p>
+                        <p class="recal-subtitle">
+                            Your info will never be shared with anyone.
+                        </p>
                     </form>
                 </div>
             </div>
