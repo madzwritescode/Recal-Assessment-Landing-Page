@@ -157,6 +157,7 @@ const Input = ({
   suffix,
   inputMode,
   pattern,
+  shouldAllowOnlyNumbers,
 }: {
   type?: string;
   name: keyof FormData;
@@ -165,6 +166,7 @@ const Input = ({
   suffix?: string;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   pattern?: string;
+  shouldAllowOnlyNumbers?: boolean;
   onChange: (name: keyof FormData, value: string) => void;
 }) => (
   <div className="relative">
@@ -173,7 +175,23 @@ const Input = ({
       inputMode={inputMode}
       pattern={pattern}
       value={value}
-      onChange={(e) => onChange(name, e.target.value)}
+      onKeyDown={(e) => {
+        if (
+          shouldAllowOnlyNumbers &&
+          !["Backspace", "Tab", "ArrowLeft", "ArrowRight", "Delete"].includes(e.key) &&
+          !/[0-9.]/.test(e.key)
+        ) {
+          e.preventDefault();
+        }
+      }}
+      onChange={(e) => {
+        if (shouldAllowOnlyNumbers) {
+          const sanitized = e.target.value.replace(/[^0-9.]/g, "");
+          onChange(name, sanitized);
+        } else {
+          onChange(name, e.target.value);
+        }
+      }}
       placeholder={placeholder}
       className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 pr-14 text-base font-medium text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
     />
@@ -519,6 +537,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
             suffix="sec"
             inputMode="decimal"
             pattern="[0-9]*"
+            shouldAllowOnlyNumbers
             onChange={updateForm}
           />
         </div>
@@ -549,6 +568,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
             suffix="sec"
             inputMode="decimal"
             pattern="[0-9]*"
+            shouldAllowOnlyNumbers
             onChange={updateForm}
           />
         </div>
@@ -579,6 +599,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
             suffix="steps"
             inputMode="numeric"
             pattern="[0-9]*"
+            shouldAllowOnlyNumbers
             onChange={updateForm}
           />
         </div>
@@ -758,20 +779,22 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
             Still calibrating live data from the sheet... please check your inbox if this takes longer than a minute.
           </p>
         )}
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="md:col-span-3 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow">
-            <p className="text-xs uppercase tracking-[0.5em] text-slate-500">RBI Score</p>
-            <p className="mt-3 text-5xl font-semibold text-[#0A4367]">{summaryMetrics[0].value}</p>
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0A4367] to-[#144C74] p-6 text-center text-white shadow">
+            <p className="text-xs uppercase tracking-[0.5em] text-white/70">RBI Score</p>
+            <p className="mt-3 text-5xl font-semibold">{summaryMetrics[0].value}</p>
           </div>
-          {summaryMetrics.slice(1).map((metric) => (
-            <div
-              key={metric.label}
-              className="rounded-2xl border border-slate-200 bg-white/70 p-5 text-center shadow-sm"
-            >
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{metric.label}</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">{metric.value}</p>
-            </div>
-          ))}
+          <div className="grid gap-4 md:grid-cols-2">
+            {summaryMetrics.slice(1).map((metric) => (
+              <div
+                key={metric.label}
+                className="rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm"
+              >
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{metric.label}</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{metric.value}</p>
+              </div>
+            ))}
+          </div>
         </div>
         <div className="space-y-4 rounded-2xl border border-slate-200 bg-white/70 p-5">
           <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Your Goal</p>
