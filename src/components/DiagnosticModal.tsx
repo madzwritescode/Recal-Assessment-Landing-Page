@@ -458,7 +458,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
         className="text-3xl font-semibold leading-tight"
         style={{ color: brandNavy, fontFamily: "Rogue Sans Ext, sans-serif", fontStyle: "italic" }}
       >
-        Welcome to your RBI assessment, handcrafted by Coach Anthony.
+        Welcome to your RBI assessment.
       </h2>
       <p className="text-base text-slate-700">
         You’re about to uncover the exact breathing mechanics shaping your performance.
@@ -475,10 +475,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
         After you submit, I’ll send a full breakdown of your Breath Index plus breathwork
         protocols tailored to your physiology.
       </p>
-      <VideoCard
-        videoId="Cq1DpJsAOAM"
-        caption="Watch the short welcome before you start."
-      />
+      <VideoCard videoId="Cq1DpJsAOAM" caption="" />
     </div>
   );
 
@@ -498,14 +495,18 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
             <li>Release gently and note the seconds.</li>
           </ul>
         </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <p className="font-semibold">Pro tip:</p>
+          <p className="mt-1">
+            Your first urge to breathe may show up as a swallow reflex, a tightening in the throat, or a
+            noticeable shift in diaphragm tension. Avoid waiting for dizziness—log the score at that very first signal.
+          </p>
+        </div>
       </div>
       <div className="space-y-6">
-        <VideoCard
-          videoId="9iIKhj7oyeI"
-          caption="Coach Anthony walks you through the Blood Oxygen Level Test."
-        />
+        <VideoCard videoId="9iIKhj7oyeI" caption="" />
         <div className="space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-4">
-          <p className="text-sm font-semibold text-slate-900">Who am I sending the results to?</p>
+          <p className="text-sm font-semibold text-slate-900">Results will be sent to:</p>
           <div className="grid gap-3 md:grid-cols-2">
             <Input
               name="firstName"
@@ -555,10 +556,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
         </p>
       </div>
       <div className="space-y-6">
-        <VideoCard
-          videoId="XGzAGDv6Q6I"
-          caption="Follow along to secure your CO₂TT score."
-        />
+        <VideoCard videoId="XGzAGDv6Q6I" caption="" />
         <div className="space-y-2">
           <FieldLabel label="CO₂TT Score" />
           <Input
@@ -586,10 +584,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
         </p>
       </div>
       <div className="space-y-6">
-        <VideoCard
-          videoId="-Kb3O8m8eqk"
-          caption="Use this guided pacing for your MBT."
-        />
+        <VideoCard videoId="-Kb3O8m8eqk" caption="" />
         <div className="space-y-2">
           <FieldLabel label="MBT Score" />
           <Input
@@ -626,10 +621,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
           </p>
         </div>
         <div className="space-y-6">
-          <VideoCard
-            videoId="BD3H3CsU1rs"
-            caption="Coach Anthony demos each LOM zone."
-          />
+        <VideoCard videoId="BD3H3CsU1rs" caption="" />
           <div className="space-y-3 max-h-[280px] overflow-y-auto pr-2">
             {options.map((label) => (
               <RadioOption
@@ -667,7 +659,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
         </div>
       </div>
       <div className="space-y-6">
-        <VideoCard videoId="BTAMfHcT1Zo" caption="Follow along for the ROM setup." />
+        <VideoCard videoId="BTAMfHcT1Zo" caption="" />
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <FieldLabel label="Inhale Circumference" />
@@ -675,7 +667,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
               name="romInhale"
               value={formData.romInhale}
               placeholder='e.g. "34.5"'
-              suffix="in"
+              suffix="in / cm"
               onChange={updateForm}
             />
           </div>
@@ -685,7 +677,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
               name="romExhale"
               value={formData.romExhale}
               placeholder='e.g. "31.2"'
-              suffix="in"
+              suffix="in / cm"
               onChange={updateForm}
             />
           </div>
@@ -762,9 +754,9 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
 
   const renderSummary = () => {
     const summaryMetrics = [
-      { label: "RBI Score", value: assessmentResult?.score ?? "In progress" },
-      { label: "RBI Grade", value: assessmentResult?.grade ?? "Calibrating" },
-      { label: "Level Badge", value: assessmentResult?.badge ?? "Check inbox soon" },
+      { label: "Score", value: assessmentResult?.score ?? "In progress" },
+      { label: "Grade", value: assessmentResult?.grade ?? "Calibrating" },
+      { label: "Level", value: assessmentResult?.badge ?? "Check inbox soon" },
     ];
 
     return (
@@ -781,7 +773,7 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
         )}
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0A4367] to-[#144C74] p-6 text-center text-white shadow">
-            <p className="text-xs uppercase tracking-[0.5em] text-white/70">RBI Score</p>
+            <p className="text-xs uppercase tracking-[0.5em] text-white/70">Score</p>
             <p className="mt-3 text-5xl font-semibold">{summaryMetrics[0].value}</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -806,12 +798,21 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
           )}
         </div>
         <div className="rounded-3xl bg-gradient-to-r from-[#0A4367] to-[#144C74] p-6 text-white shadow-xl">
-          <p className="text-lg font-semibold">Want the deep dive?</p>
+          <p className="text-lg font-semibold">Your next move</p>
           <p className="mt-2 text-sm text-slate-100">
-            We just sent the complete report to your inbox with your strongest + weakest link,
-            plus the drills to fix it. Ready to accelerate the plan with me?
+            Want to see which link is strongest vs. weakest—and the drill that fixes it?
+            Your full RBI dossier is waiting in your inbox right now.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
+            <p className="text-sm text-slate-100">
+              Check your inbox for the full playbook. Want me to walk through it with you?
+            </p>
+            <button
+              onClick={handleClose}
+              className="rounded-2xl border border-white/70 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              Close
+            </button>
             <a
               href={bookingUrl}
               target="_blank"
@@ -823,12 +824,6 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
             >
               Book a Free Call
             </a>
-            <button
-              onClick={handleClose}
-              className="rounded-2xl border border-white/70 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-            >
-              Close
-            </button>
           </div>
         </div>
       </div>
