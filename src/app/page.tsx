@@ -547,7 +547,7 @@ export default function Home() {
                     <div className="hidden lg:flex flex-col justify-start items-center h-full space-y-6">
                       <div className="w-full max-w-sm h-[500px] rounded-xl overflow-hidden">
                         <Image
-                          src="/hero-image-updated.png"
+                          src="/hero-image.png"
                           alt="Recal Breath Assessment App"
                           width={300}
                           height={500}
