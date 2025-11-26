@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recal Breath Assessment</title>
     <style>
+        @font-face {
+            font-family: 'Rogue Sans Ext';
+            src: url('/fonts/fonnts.com-Rogue_Sans_Ext_Bold_It.otf') format('opentype');
+            font-weight: 700;
+            font-style: italic;
+            font-display: swap;
+        }
+
         /* Reset and Base Styles */
         * {
             margin: 0;
@@ -57,10 +65,11 @@
         }
 
         .recal-brand-logo span {
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 700;
             letter-spacing: 0.12em;
             text-transform: uppercase;
+            font-family: 'Rogue Sans Ext', 'Rogue Sans Ext', sans-serif;
         }
 
         .recal-tagline {
@@ -94,6 +103,7 @@
             font-weight: 600;
             background: rgba(255, 255, 255, 0.92);
             color: #0A4367;
+            font-family: 'Rogue Sans Ext', 'Rogue Sans Ext', sans-serif;
             box-shadow: 0 6px 15px rgba(10, 67, 103, 0.08);
             transition: border-color 0.2s, box-shadow 0.2s;
         }
@@ -105,8 +115,10 @@
         }
 
         .recal-input::placeholder {
-            color: #9fb3c6;
-            font-weight: 500;
+            color: #0A4367;
+            font-weight: 600;
+            opacity: 0.8;
+            font-family: 'Rogue Sans Ext', 'Rogue Sans Ext', sans-serif;
         }
 
         .recal-button {
@@ -118,6 +130,7 @@
             border-radius: 18px;
             font-size: 16px;
             font-weight: 700;
+            font-family: 'Rogue Sans Ext', 'Rogue Sans Ext', sans-serif;
             height: 54px;
             cursor: pointer;
             box-shadow: 0 18px 30px rgba(6, 53, 92, 0.35);
@@ -170,7 +183,7 @@
             <div class="recal-brand-header">
                 <div class="recal-brand-logo">
                     <img src="/assets/recal-embed-logo.png" alt="Recal logo" />
-                    <span>Recal Breath Assessment</span>
+                    <span>Recal Breath Index</span>
                 </div>
             </div>
             <div class="recal-form-content">
@@ -206,9 +219,6 @@
                     </button>
                     <p class="recal-fine-print">
                         Takes 5-10 minutes on average to complete
-                    </p>
-                    <p class="recal-subtitle">
-                        Your info will never be shared with anyone. No Credit card required.
                     </p>
                 </form>
             </div>

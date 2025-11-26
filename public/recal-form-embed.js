@@ -35,6 +35,13 @@
     // CSS Styles
     const STYLES = `
         <style>
+            @font-face {
+                font-family: 'Rogue Sans Ext';
+                src: url('${BASE_URL}/fonts/fonnts.com-Rogue_Sans_Ext_Bold_It.otf') format('opentype');
+                font-weight: 700;
+                font-style: italic;
+                font-display: swap;
+            }
             .recal-widget-shell {
                 background: linear-gradient(135deg, #f7f8ff, #eef4ff);
                 border-radius: 30px;
@@ -68,10 +75,11 @@
                 filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.4));
             }
             .recal-brand-logo span {
-                font-size: 13px;
+                font-size: 14px;
                 font-weight: 700;
                 letter-spacing: 0.12em;
                 text-transform: uppercase;
+                font-family: 'Rogue Sans Ext', sans-serif;
             }
             .recal-tagline {
                 font-size: 15px;
@@ -99,6 +107,7 @@
                 font-weight: 600;
                 background: rgba(255, 255, 255, 0.92);
                 color: #0A4367;
+                font-family: 'Rogue Sans Ext', sans-serif;
                 box-shadow: 0 6px 15px rgba(10, 67, 103, 0.08);
                 transition: border-color 0.2s, box-shadow 0.2s;
             }
@@ -108,8 +117,10 @@
                 box-shadow: 0 0 0 3px rgba(15, 92, 137, 0.15);
             }
             .recal-input::placeholder {
-                color: #9fb3c6;
-                font-weight: 500;
+                color: #0A4367;
+                font-weight: 600;
+                opacity: 0.9;
+                font-family: 'Rogue Sans Ext', sans-serif;
             }
             .recal-button {
                 width: 100%;
@@ -120,6 +131,7 @@
                 border-radius: 18px;
                 font-size: 16px;
                 font-weight: 700;
+                font-family: 'Rogue Sans Ext', sans-serif;
                 height: 54px;
                 cursor: pointer;
                 box-shadow: 0 18px 30px rgba(6, 53, 92, 0.35);
@@ -166,7 +178,7 @@
                 <div class="recal-brand-header">
                     <div class="recal-brand-logo">
                         <img src="${BASE_URL}/assets/recal-embed-logo.png" alt="Recal logo" />
-                        <span>Recal Breath Assessment</span>
+                        <span>Recal Breath Index</span>
                     </div>
                 </div>
                 <div class="recal-form-content">
@@ -202,9 +214,6 @@
                         </button>
                         <p class="recal-fine-print">
                             Takes 5-10 minutes on average to complete
-                        </p>
-                        <p class="recal-subtitle">
-                            Your info will never be shared with anyone. No Credit card required.
                         </p>
                     </form>
                 </div>

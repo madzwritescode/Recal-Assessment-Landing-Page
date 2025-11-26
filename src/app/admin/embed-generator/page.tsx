@@ -89,8 +89,8 @@ export default function EmbedGenerator() {
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 placeholder="e.g., Climbing the Seven Summits"
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                style={{ borderColor: '#0A4367' }}
+                className="w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-[#0A4367]"
+                style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic' }}
               />
             </div>
 
@@ -105,8 +105,8 @@ export default function EmbedGenerator() {
                 value={gaId}
                 onChange={(e) => setGaId(e.target.value)}
                 placeholder={`Leave blank to use default: ${defaultGaId}`}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                style={{ borderColor: '#0A4367' }}
+                className="w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-[#0A4367]"
+                style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic' }}
               />
               <p className="mt-1 text-sm text-gray-500">
                 If left blank, will use Recal's default tracking ID ({defaultGaId})
@@ -124,8 +124,8 @@ export default function EmbedGenerator() {
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
                 placeholder="https://yourdomain.com"
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                style={{ borderColor: '#0A4367' }}
+                className="w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-[#0A4367]"
+                style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic' }}
               />
               <p className="mt-1 text-sm text-gray-500">
                 The base URL of your Next.js application
@@ -217,6 +217,13 @@ export default function EmbedGenerator() {
           )}
         </div>
       </div>
+      <style jsx>{`
+        input::placeholder {
+          color: rgba(10, 67, 103, 0.8);
+          font-family: 'Rogue Sans Ext', sans-serif;
+          font-style: italic;
+        }
+      `}</style>
     </div>
   );
 }
