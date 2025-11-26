@@ -155,17 +155,23 @@ const Input = ({
   onChange,
   placeholder,
   suffix,
+  inputMode,
+  pattern,
 }: {
   type?: string;
   name: keyof FormData;
   value: string;
   placeholder?: string;
   suffix?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  pattern?: string;
   onChange: (name: keyof FormData, value: string) => void;
 }) => (
   <div className="relative">
     <input
       type={type || "text"}
+      inputMode={inputMode}
+      pattern={pattern}
       value={value}
       onChange={(e) => onChange(name, e.target.value)}
       placeholder={placeholder}
@@ -294,7 +300,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const fetchAssessmentResultWithRetries = async (email: string) => {
   if (!email) return null;
-  const maxAttempts = 4;
+  const maxAttempts = 20;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await sleep(attempt === 0 ? 2000 : 2500);
     try {
@@ -303,15 +309,17 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
+      const payload = await response.json().catch(() => ({}));
       if (response.ok) {
-        const data = await response.json();
-        if (data?.score || data?.grade || data?.badge) {
+        if ((payload?.score ?? payload?.grade ?? payload?.badge) !== null) {
           return {
-            score: data.score ?? null,
-            grade: data.grade ?? null,
-            badge: data.badge ?? null,
+            score: payload.score ?? null,
+            grade: payload.grade ?? null,
+            badge: payload.badge ?? null,
           } as AssessmentResult;
         }
+      } else {
+        console.warn("rbi-result fetch failed", response.status, payload);
       }
     } catch (error) {
       console.error("fetch assessment result error", error);
@@ -372,9 +380,9 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
     trackEvent("diagnostic_modal_submit", "submit");
 
     try {
+      await submitToGoogleForm();
       await Promise.all([
         recordLandingSignup(),
-        submitToGoogleForm(),
         webhookUrl
           ? fetch(webhookUrl, {
               method: "POST",
@@ -509,6 +517,8 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
             value={formData.boltScore}
             placeholder='e.g. "25"'
             suffix="sec"
+            inputMode="decimal"
+            pattern="[0-9]*"
             onChange={updateForm}
           />
         </div>
@@ -537,6 +547,8 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
             value={formData.co2ttScore}
             placeholder='e.g. "68"'
             suffix="sec"
+            inputMode="decimal"
+            pattern="[0-9]*"
             onChange={updateForm}
           />
         </div>
@@ -565,6 +577,8 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
             value={formData.mbtSteps}
             placeholder='e.g. "61"'
             suffix="steps"
+            inputMode="numeric"
+            pattern="[0-9]*"
             onChange={updateForm}
           />
         </div>
@@ -728,8 +742,8 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
   const renderSummary = () => {
     const summaryMetrics = [
       { label: "RBI Score", value: assessmentResult?.score ?? "In progress" },
-      { label: "Level Badge", value: assessmentResult?.badge ?? "Check inbox soon" },
       { label: "RBI Grade", value: assessmentResult?.grade ?? "Calibrating" },
+      { label: "Level Badge", value: assessmentResult?.badge ?? "Check inbox soon" },
     ];
 
     return (
@@ -739,14 +753,23 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
           We’ve emailed you the full breakdown of your strongest and weakest breathing links.
           Here’s the top line from your RBI dashboard.
         </p>
+        {!assessmentResult && (
+          <p className="text-sm text-amber-600">
+            Still calibrating live data from the sheet... please check your inbox if this takes longer than a minute.
+          </p>
+        )}
         <div className="grid gap-4 md:grid-cols-3">
-          {summaryMetrics.map((metric) => (
+          <div className="md:col-span-3 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow">
+            <p className="text-xs uppercase tracking-[0.5em] text-slate-500">RBI Score</p>
+            <p className="mt-3 text-5xl font-semibold text-[#0A4367]">{summaryMetrics[0].value}</p>
+          </div>
+          {summaryMetrics.slice(1).map((metric) => (
             <div
               key={metric.label}
               className="rounded-2xl border border-slate-200 bg-white/70 p-5 text-center shadow-sm"
             >
               <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{metric.label}</p>
-              <p className="mt-3 text-3xl font-semibold text-slate-900">{metric.value}</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900">{metric.value}</p>
             </div>
           ))}
         </div>
@@ -775,7 +798,7 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
               onClick={() => trackEvent("diagnostic_modal_cta", "book_call")}
               className="inline-flex items-center justify-center rounded-2xl bg-white/90 px-6 py-3 text-sm font-semibold text-[#0A4367] transition hover:bg-white"
             >
-              Book a Calibration Call
+              Book a Free Call
             </a>
             <button
               onClick={handleClose}

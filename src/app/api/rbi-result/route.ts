@@ -3,6 +3,20 @@ import { NextResponse } from 'next/server';
 
 const normalize = (value?: string) => value?.trim().toLowerCase() ?? '';
 
+const findColumnIndex = (headerRow: string[], labels: string[]) => {
+  for (const label of labels) {
+    const idx = headerRow.findIndex((cell) => normalize(cell) === normalize(label));
+    if (idx !== -1) return idx;
+  }
+  // fallback: fuzzy match containing keywords
+  const keyword = labels[0]?.split(' ')[0] ?? '';
+  if (keyword) {
+    const fuzzyIdx = headerRow.findIndex((cell) => normalize(cell).includes(normalize(keyword)));
+    if (fuzzyIdx !== -1) return fuzzyIdx;
+  }
+  return -1;
+};
+
 export async function POST(request: Request) {
   try {
     const { email } = await request.json();
@@ -14,7 +28,9 @@ export async function POST(request: Request) {
     const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
     const sheetId = process.env.GOOGLE_SHEET_ID;
     const dataRange = process.env.GOOGLE_RBI_RESULTS_RANGE || 'Form Responses 1!A:O';
-    const emailHeader = process.env.GOOGLE_RBI_EMAIL_HEADER || 'Email';
+    const emailHeader =
+      process.env.GOOGLE_RBI_EMAIL_HEADER ||
+      'Email Address';
     const scoreHeader = process.env.GOOGLE_RBI_SCORE_HEADER || 'Calculated Summit-Ready Score';
     const gradeHeader = process.env.GOOGLE_RBI_GRADE_HEADER || 'Calculated Grade';
     const badgeHeader = process.env.GOOGLE_RBI_BADGE_HEADER || 'Calculated Badge';
@@ -41,13 +57,15 @@ export async function POST(request: Request) {
     }
 
     const header = rows[0];
-    const findIndex = (label: string) =>
-      header.findIndex((cell) => normalize(cell) === normalize(label));
 
-    const emailIdx = findIndex(emailHeader);
-    const scoreIdx = findIndex(scoreHeader);
-    const gradeIdx = findIndex(gradeHeader);
-    const badgeIdx = findIndex(badgeHeader);
+    const emailIdx = findColumnIndex(header, [
+      emailHeader,
+      'Email Address',
+      'Email',
+    ]);
+    const scoreIdx = findColumnIndex(header, [scoreHeader]);
+    const gradeIdx = findColumnIndex(header, [gradeHeader]);
+    const badgeIdx = findColumnIndex(header, [badgeHeader]);
 
     if (emailIdx === -1) {
       return NextResponse.json({ error: 'Email column not found' }, { status: 500 });
@@ -55,7 +73,7 @@ export async function POST(request: Request) {
 
     for (let i = rows.length - 1; i >= 1; i--) {
       const row = rows[i];
-      if (normalize(row[emailIdx]) === normalize(email)) {
+      if (normalize(row[emailIdx] ?? '') === normalize(email)) {
         return NextResponse.json({
           score: scoreIdx >= 0 ? row[scoreIdx] ?? null : null,
           grade: gradeIdx >= 0 ? row[gradeIdx] ?? null : null,

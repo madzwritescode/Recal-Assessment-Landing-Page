@@ -1,6 +1,4 @@
 {
-  "/api/record-landing-signup/route": "app/api/record-landing-signup/route.js",
-  "/api/rbi-result/route": "app/api/rbi-result/route.js",
   "/api/latest-signups/route": "app/api/latest-signups/route.js",
   "/page": "app/page.js"
 }
