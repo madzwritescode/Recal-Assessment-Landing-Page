@@ -10,6 +10,7 @@ export default function EmbedGenerator() {
     script: string;
     iframe: string;
   } | null>(null);
+  const EMBED_VERSION = "20241126";
 
   // Set base URL after component mounts (client-side only)
   useEffect(() => {
@@ -42,11 +43,11 @@ export default function EmbedGenerator() {
         companyName: '${companyName.trim()}'
     };
 </script>
-<script src="${finalBaseUrl}/recal-form-embed.js"></script>`;
+<script src="${finalBaseUrl}/recal-form-embed.js?v=${EMBED_VERSION}"></script>`;
 
     // Generate Iframe Embed Code
     const iframeCode = `<iframe 
-    src="${finalBaseUrl}/recal-form-embed.html?baseUrl=${encodedBaseUrl}&gaId=${encodedGaId}&company=${encodedCompany}" 
+    src="${finalBaseUrl}/recal-form-embed.html?baseUrl=${encodedBaseUrl}&gaId=${encodedGaId}&company=${encodedCompany}&v=${EMBED_VERSION}" 
     width="100%" 
     height="400" 
     frameborder="0"
