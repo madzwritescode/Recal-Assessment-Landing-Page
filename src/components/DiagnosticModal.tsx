@@ -24,14 +24,45 @@ type FormData = {
   lomZone: string;
   romInhale: string;
   romExhale: string;
+  goalType: string;
+  goalDetail: string;
+};
+
+type AssessmentResult = {
+  score: string | null;
+  grade: string | null;
+  badge: string | null;
 };
 
 const brandNavy = "#0A4367";
-const modalSteps = 7;
-const totalTests = 5;
+const modalSteps = 9;
+const totalTests = 6;
 const webhookUrl = process.env.NEXT_PUBLIC_DIAGNOSTIC_WEBHOOK_URL;
 const bookingUrl =
   process.env.NEXT_PUBLIC_RBI_CTA_URL || "mailto:anthony@recalibrate.world";
+const googleFormUrl =
+  process.env.NEXT_PUBLIC_GOOGLE_FORM_URL ||
+  "https://docs.google.com/forms/d/e/1FAIpQLSfdvHwTAuYDUZrqKntNaIcZbNM_RPothRiZgcMbwFPeb8Mx0A/formResponse";
+
+const googleEntryIds = {
+  firstName: "entry.1328606392",
+  lastName: "entry.343152274",
+  email: "entry.1362361142",
+  goalType: "entry.1174770986",
+  boltScore: "entry.1002851429",
+  co2Score: "entry.197086545",
+  mbtScore: "entry.1392028128",
+  lomZone: "entry.1358412920",
+  romScore: "entry.1128018511",
+  goalDetail: "entry.887435060",
+};
+
+const loadingMessages = [
+  "Calibrating your RBI score...",
+  "Identifying your strongest and weakest links...",
+  "Mapping the next breathwork protocol...",
+  "Finalizing your report...",
+];
 
 const initialForm: FormData = {
   firstName: "",
@@ -43,6 +74,8 @@ const initialForm: FormData = {
   lomZone: "",
   romInhale: "",
   romExhale: "",
+  goalType: "",
+  goalDetail: "",
 };
 
 const youtubeParams =
@@ -55,10 +88,14 @@ const formatSteps = (value: string) =>
   value ? `${value.replace(/[^0-9.]/g, "")} steps` : "–";
 
 const computeRomPercent = (inhale: string, exhale: string) => {
-  const inhaleNum = parseFloat(inhale);
-  const exhaleNum = parseFloat(exhale);
-  if (!inhaleNum || !exhaleNum || exhaleNum === 0) return null;
-  return (((inhaleNum - exhaleNum) / exhaleNum) * 100).toFixed(1);
+  const inhaleNum = Number(inhale);
+  const exhaleNum = Number(exhale);
+  if (!Number.isFinite(inhaleNum) || !Number.isFinite(exhaleNum) || exhaleNum <= 0) {
+    return null;
+  }
+  const rom = ((inhaleNum - exhaleNum) / exhaleNum) * 1000;
+  if (!Number.isFinite(rom)) return null;
+  return rom.toFixed(1);
 };
 
 const getScoreTag = (value: number, thresholds: number[]) => {
@@ -76,7 +113,7 @@ const motionVariants = {
 
 const SectionTitle = ({ title, subtitle }: { title: string; subtitle?: string }) => (
   <div className="space-y-2">
-    <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{subtitle}</p>
+    <p className="text-xs uppercase tracking-[0.15em] text-slate-500">{subtitle}</p>
     <h3
       className="text-2xl font-semibold"
       style={{ color: brandNavy, fontFamily: "Rogue Sans Ext, sans-serif", fontStyle: "italic" }}
@@ -171,6 +208,8 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     "idle" | "submitting" | "success" | "error"
   >("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [assessmentResult, setAssessmentResult] = useState<AssessmentResult | null>(null);
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
 
   const progressPercent = useMemo(() => {
     const raw = ((Math.max(step - 1, 0) / totalTests) * 100);
@@ -197,10 +236,22 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     }
   }, [initialLead]);
 
+  useEffect(() => {
+    if (step === modalSteps - 1) {
+      setLoadingMessageIndex(0);
+      const interval = setInterval(() => {
+        setLoadingMessageIndex((prev) => (prev + 1) % loadingMessages.length);
+      }, 2500);
+      return () => clearInterval(interval);
+    }
+  }, [step]);
+
   const resetState = useCallback(() => {
     setFormData(initialForm);
     setSubmissionState("idle");
     setErrorMessage(null);
+    setAssessmentResult(null);
+    setLoadingMessageIndex(0);
     setStep(1);
   }, []);
 
@@ -223,6 +274,9 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       handleClose();
       return;
     }
+    if (step === modalSteps - 1) {
+      return;
+    }
     setStep((prev) => Math.max(1, prev - 1));
   };
 
@@ -235,6 +289,36 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       source: "recal-landing-rbi-modal",
     };
   };
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchAssessmentResultWithRetries = async (email: string) => {
+  if (!email) return null;
+  const maxAttempts = 4;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await sleep(attempt === 0 ? 2000 : 2500);
+    try {
+      const response = await fetch("/api/rbi-result", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.score || data?.grade || data?.badge) {
+          return {
+            score: data.score ?? null,
+            grade: data.grade ?? null,
+            badge: data.badge ?? null,
+          } as AssessmentResult;
+        }
+      }
+    } catch (error) {
+      console.error("fetch assessment result error", error);
+    }
+  }
+  return null;
+};
 
   const recordLandingSignup = async () => {
     try {
@@ -252,14 +336,45 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     }
   };
 
+  const submitToGoogleForm = async () => {
+    if (!googleFormUrl) return;
+    const rom = romPercent ? romPercent.replace(/[^0-9.]/g, "") : "";
+    const body = new URLSearchParams();
+    body.set("fvv", "1");
+    body.set("draftResponse", "[]");
+    body.set("pageHistory", "0,1,2,3,4,5,6");
+    body.set("fbzx", Date.now().toString());
+    body.set(googleEntryIds.firstName, formData.firstName);
+    body.set(googleEntryIds.lastName, formData.lastName);
+    body.set(googleEntryIds.email, formData.email);
+    body.set(googleEntryIds.goalType, formData.goalType);
+    body.set(googleEntryIds.boltScore, formData.boltScore);
+    body.set(googleEntryIds.co2Score, formData.co2ttScore);
+    body.set(googleEntryIds.mbtScore, formData.mbtSteps);
+    body.set(googleEntryIds.lomZone, formData.lomZone);
+    body.set(googleEntryIds.goalDetail, formData.goalDetail);
+    if (rom) body.set(googleEntryIds.romScore, rom);
+    try {
+      await fetch(googleFormUrl, {
+        method: "POST",
+        mode: "no-cors",
+        body,
+      });
+    } catch (error) {
+      console.error("google form submission error", error);
+    }
+  };
+
   const handleSubmit = async () => {
     setSubmissionState("submitting");
     setErrorMessage(null);
+    setStep(modalSteps - 1);
     trackEvent("diagnostic_modal_submit", "submit");
 
     try {
       await Promise.all([
         recordLandingSignup(),
+        submitToGoogleForm(),
         webhookUrl
           ? fetch(webhookUrl, {
               method: "POST",
@@ -268,13 +383,17 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
             })
           : Promise.resolve(),
       ]);
-
+      const result = await fetchAssessmentResultWithRetries(formData.email.trim());
+      if (result) {
+        setAssessmentResult(result);
+      }
       setSubmissionState("success");
       setStep(modalSteps);
     } catch (error) {
       console.error("Diagnostic submission error", error);
       setSubmissionState("error");
       setErrorMessage("We couldn’t submit your results. Please try again.");
+      setStep(7);
     }
   };
 
@@ -285,6 +404,7 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       4: ["mbtSteps"],
       5: ["lomZone"],
       6: ["romInhale", "romExhale"],
+      7: ["goalType"],
     };
     const requirements = requiredByStep[step];
     if (!requirements) return true;
@@ -296,7 +416,7 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       handleClose();
       return;
     }
-    if (step === 6) {
+    if (step === 7) {
       handleSubmit();
       return;
     }
@@ -305,7 +425,7 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
 
   const renderHeroCopy = () => (
     <div className="space-y-4">
-      <p className="text-sm uppercase tracking-[0.4em] text-slate-500">
+      <p className="text-sm uppercase tracking-[0.25em] text-slate-500">
         The Recal Breath Index
       </p>
       <h2
@@ -316,14 +436,19 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       </h2>
       <p className="text-base text-slate-700">
         You’re about to uncover the exact breathing mechanics shaping your performance.
-        Grab a timer, space for a straight-line walk, and a tape measure or shoelace + ruler.
       </p>
+      <div className="rounded-2xl border border-slate-200 bg-white/70 p-4">
+        <p className="text-sm font-semibold text-slate-900">What you’ll need:</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+          <li>A timer</li>
+          <li>Space to walk in a straight line</li>
+          <li>A tape measure (or shoelace + ruler)</li>
+        </ul>
+      </div>
       <p className="text-base text-slate-700">
         After you submit, I’ll send a full breakdown of your Breath Index plus breathwork
         protocols tailored to your physiology.
       </p>
-      <p className="text-base font-medium text-slate-900">See you on the other side,</p>
-      <p className="text-lg font-semibold text-slate-900">– Coach Anthony</p>
       <VideoCard
         videoId="Cq1DpJsAOAM"
         caption="Watch the short welcome before you start."
@@ -494,6 +619,9 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
           Measure your rib cage circumference at full inhale and exhale. We’ll translate
           that into a ROM percentage that reflects how much space you create for oxygen.
         </p>
+        <p className="text-sm text-slate-600">
+          Formula: <span className="font-semibold text-slate-900">(Inhale - Exhale) / Exhale * 1000</span>
+        </p>
         <div className="rounded-2xl border border-slate-200 bg-white/60 p-4 text-sm text-slate-700">
           <p className="font-semibold text-slate-900">What you need:</p>
           <ul className="mt-2 space-y-1 list-disc list-inside">
@@ -535,106 +663,107 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     </div>
   );
 
-  const renderSummary = () => {
-    const rom = romPercent ? parseFloat(romPercent) : NaN;
-    const boltValue = parseFloat(formData.boltScore);
-    const co2Value = parseFloat(formData.co2ttScore);
-    const mbtValue = parseFloat(formData.mbtSteps);
+const goalOptions = [
+  "Climb a high altitude mountain",
+  "Run an ultra race at altitude",
+  "Run a marathon (or other distance) at or near sea level",
+  "Hiking/trekking in general",
+];
 
-    const scorecards = [
-      {
-        label: "BOLT",
-        value: formatSeconds(formData.boltScore),
-        tag: getScoreTag(boltValue, [20, 30]),
-        insight:
-          boltValue >= 30
-            ? "Elite CO₂ tolerance."
-            : boltValue >= 20
-            ? "Solid, but more precision unlocks focus."
-            : "Let’s build your tolerance rhythm.",
-      },
-      {
-        label: "CO₂TT",
-        value: formatSeconds(formData.co2ttScore),
-        tag: getScoreTag(co2Value, [50, 70]),
-        insight:
-          co2Value >= 70
-            ? "Calm nervous system under stress."
-            : co2Value >= 50
-            ? "Developing adaptability."
-            : "Start stacking exhale holds + cadence work.",
-      },
-      {
-        label: "MBT",
-        value: formatSteps(formData.mbtSteps),
-        tag: getScoreTag(mbtValue, [55, 75]),
-        insight:
-          mbtValue >= 75
-            ? "High-end endurance under breathlessness."
-            : mbtValue >= 55
-            ? "Capacity is building — refine pacing."
-            : "We’ll expand your ceiling with progressive walks.",
-      },
-      {
-        label: "LOM",
-        value: formData.lomZone || "—",
-        tag: formData.lomZone.includes("Zone 1") ? "Dialed In" : "Needs Attention",
-        insight:
-          formData.lomZone.includes("Zone 1")
-            ? "Great diaphragmatic sequencing."
-            : "We’ll train you toward Zone 1 dominance.",
-      },
-      {
-        label: "ROM",
-        value: romPercent ? `${romPercent}%` : "—",
-        tag: getScoreTag(rom, [8, 12]),
-        insight:
-          rom && rom >= 12
-            ? "Strong rib cage expansion."
-            : rom && rom >= 8
-            ? "Good mobility — polish breathing angles."
-            : "We’ll create more space through targeted drills.",
-      },
+const renderGoalStep = (
+  formData: FormData,
+  updateForm: (name: keyof FormData, value: string) => void
+) => (
+  <div className="space-y-6">
+    <SectionTitle title="What are you training for?" subtitle="Step 6 • Goal" />
+    <p className="text-base text-slate-700">
+      This helps us benchmark your RBI against the mission ahead.
+    </p>
+    <div className="space-y-2">
+      <FieldLabel label="My current goal is" />
+      <select
+        value={formData.goalType}
+        onChange={(e) => updateForm("goalType", e.target.value)}
+        className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+      >
+        <option value="">Select a goal</option>
+        {goalOptions.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </div>
+    <div className="space-y-2">
+      <FieldLabel label="Tell us more about your goal" />
+      <textarea
+        value={formData.goalDetail}
+        onChange={(e) => updateForm("goalDetail", e.target.value)}
+        placeholder={`"Mt. Rainier in July"\n"Leadville 100 in August"\n"Everest Base Camp trek this fall"\n"To hike without feeling out-of-breath"`}
+        className="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-base text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+        rows={4}
+      />
+    </div>
+  </div>
+);
+
+const renderLoadingStep = (loadingMessageIndex: number) => (
+  <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center">
+    <div className="h-20 w-20 rounded-full border-4 border-[#0A4367]/30 border-t-[#0A4367] animate-spin" />
+    <div className="space-y-2">
+      <p
+        className="text-2xl font-semibold"
+        style={{ color: brandNavy, fontFamily: "Rogue Sans Ext, sans-serif", fontStyle: "italic" }}
+      >
+        Calibrating your RBI
+      </p>
+      <p className="text-sm text-slate-600">{loadingMessages[loadingMessageIndex]}</p>
+      <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+        This takes about 3–5 seconds
+      </p>
+    </div>
+  </div>
+);
+
+  const renderSummary = () => {
+    const summaryMetrics = [
+      { label: "RBI Score", value: assessmentResult?.score ?? "In progress" },
+      { label: "Level Badge", value: assessmentResult?.badge ?? "Check inbox soon" },
+      { label: "RBI Grade", value: assessmentResult?.grade ?? "Calibrating" },
     ];
 
     return (
       <div className="space-y-8">
-        <SectionTitle title="Your RBI Snapshot" subtitle="Summary" />
+        <SectionTitle title="Your RBI Snapshot" subtitle="Results" />
         <p className="text-base text-slate-700">
-          I’m building your full breakdown now. Here’s the high-level view of what you just
-          uncovered. Watch your inbox for your detailed protocol.
+          We’ve emailed you the full breakdown of your strongest and weakest breathing links.
+          Here’s the top line from your RBI dashboard.
         </p>
-        <div className="grid gap-4 md:grid-cols-2">
-          {scorecards.map((card) => (
+        <div className="grid gap-4 md:grid-cols-3">
+          {summaryMetrics.map((metric) => (
             <div
-              key={card.label}
-              className="rounded-2xl border border-slate-200 bg-white/60 p-4 shadow-sm"
+              key={metric.label}
+              className="rounded-2xl border border-slate-200 bg-white/70 p-5 text-center shadow-sm"
             >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-slate-500">{card.label}</p>
-                <span
-                  className={`text-xs font-semibold uppercase tracking-wide ${
-                    card.tag === "Dialed In"
-                      ? "text-emerald-600"
-                      : card.tag === "Developing"
-                      ? "text-amber-600"
-                      : "text-rose-600"
-                  }`}
-                >
-                  {card.tag}
-                </span>
-              </div>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">{card.value}</p>
-              <p className="mt-2 text-sm text-slate-600">{card.insight}</p>
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{metric.label}</p>
+              <p className="mt-3 text-3xl font-semibold text-slate-900">{metric.value}</p>
             </div>
           ))}
         </div>
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white/70 p-5">
+          <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Your Goal</p>
+          <p className="text-xl font-semibold text-slate-900">
+            {formData.goalType || "We’ll benchmark your goal once you share it."}
+          </p>
+          {formData.goalDetail && (
+            <p className="text-sm italic text-slate-600">“{formData.goalDetail}”</p>
+          )}
+        </div>
         <div className="rounded-3xl bg-gradient-to-r from-[#0A4367] to-[#144C74] p-6 text-white shadow-xl">
-          <p className="text-lg font-semibold">What happens next?</p>
+          <p className="text-lg font-semibold">Want the deep dive?</p>
           <p className="mt-2 text-sm text-slate-100">
-            I’ll review your data personally and send over your Recal Breath Index report +
-            custom breathwork assignments. If you want to fast-track the plan, hop on a
-            Calibration Call.
+            We just sent the complete report to your inbox with your strongest + weakest link,
+            plus the drills to fix it. Ready to accelerate the plan with me?
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <a
@@ -675,24 +804,34 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       case 6:
         return renderRomStep();
       case 7:
+        return renderGoalStep(formData, updateForm);
+      case 8:
+        return renderLoadingStep(loadingMessageIndex);
+      case 9:
         return renderSummary();
       default:
         return null;
     }
-  }, [step, formData, romPercent]);
+  }, [step, formData, romPercent, loadingMessageIndex]);
+
+  const isLoadingStep = step === modalSteps - 1;
+  const isFinalStep = step === modalSteps;
 
   const nextLabel =
-    step === 6
+    isLoadingStep
+      ? "Calibrating..."
+      : step === 7
       ? submissionState === "submitting"
         ? "Submitting..."
         : "Submit Assessment"
-      : step === 7
+      : isFinalStep
       ? "Done"
       : "Next";
 
   const disableNext =
-    (step <= 6 && !isStepValid()) ||
-    (step === 6 && submissionState === "submitting");
+    isLoadingStep ||
+    (step <= 7 && !isStepValid()) ||
+    (step === 7 && submissionState === "submitting");
 
   return (
     <AnimatePresence>
@@ -714,7 +853,7 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
             <div className="border-b border-slate-100 bg-white px-8 py-6">
               <div className="flex items-start justify-between gap-6">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.6em] text-slate-400">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
                     Recal Breath Index
                   </p>
                   <h1
@@ -724,8 +863,10 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
                     RBI Assessment
                   </h1>
                   <p className="mt-1 text-sm text-slate-500">
-                    {step <= 6
-                      ? `Step ${step} of 6`
+                    {step <= 7
+                      ? `Step ${step} of 7`
+                      : step === modalSteps - 1
+                      ? "Calibrating RBI score"
                       : "Personalized breakdown"}
                   </p>
                 </div>
@@ -769,17 +910,22 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <button
                   onClick={handleBack}
+                  disabled={isLoadingStep}
                   id={step > 1 ? "diagnostic-modal-back" : "diagnostic-modal-cancel"}
                   data-gtm={step > 1 ? "diagnostic-modal-back" : "diagnostic-modal-cancel"}
-                  className="text-sm font-semibold text-slate-500 transition hover:text-slate-700"
+                  className={`text-sm font-semibold transition ${
+                    isLoadingStep
+                      ? "cursor-not-allowed text-slate-300"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
                 >
                   {step === 1 ? "Cancel" : "Back"}
                 </button>
                 <button
                   onClick={handleNext}
                   disabled={disableNext}
-                  id={step === 6 ? "diagnostic-modal-submit" : "diagnostic-modal-next"}
-                  data-gtm={step === 6 ? "diagnostic-modal-submit" : "diagnostic-modal-next"}
+                  id={step === 7 ? "diagnostic-modal-submit" : "diagnostic-modal-next"}
+                  data-gtm={step === 7 ? "diagnostic-modal-submit" : "diagnostic-modal-next"}
                   className={`inline-flex items-center justify-center rounded-2xl px-8 py-3 text-sm font-semibold text-white transition ${
                     disableNext
                       ? "cursor-not-allowed bg-slate-300"
