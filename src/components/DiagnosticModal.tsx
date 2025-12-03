@@ -39,7 +39,7 @@ const modalSteps = 9;
 const totalTests = 6;
 const webhookUrl = process.env.NEXT_PUBLIC_DIAGNOSTIC_WEBHOOK_URL;
 const bookingUrl =
-  process.env.NEXT_PUBLIC_RBI_CTA_URL || "mailto:anthony@recalibrate.world";
+  process.env.NEXT_PUBLIC_RBI_CTA_URL || "https://calendly.com/anthonylorubbio/initial-consultation-high-altitude-breathwork-training";
 const googleFormUrl =
   process.env.NEXT_PUBLIC_GOOGLE_FORM_URL ||
   "https://docs.google.com/forms/d/e/1FAIpQLSfdvHwTAuYDUZrqKntNaIcZbNM_RPothRiZgcMbwFPeb8Mx0A/formResponse";
@@ -425,7 +425,8 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
 
   const isStepValid = () => {
     const requiredByStep: Record<number, (keyof FormData)[]> = {
-      2: ["firstName", "lastName", "email", "boltScore"],
+      1: ["firstName", "lastName", "email"],
+      2: ["boltScore"],
       3: ["co2ttScore"],
       4: ["mbtSteps"],
       5: ["lomZone"],
@@ -461,10 +462,10 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
         Welcome to your RBI assessment.
       </h2>
       <p className="text-base text-slate-700">
-        You’re about to uncover the exact breathing mechanics shaping your performance.
+        You're about to uncover the exact breathing mechanics shaping your performance.
       </p>
       <div className="rounded-2xl border border-slate-200 bg-white/70 p-4">
-        <p className="text-sm font-semibold text-slate-900">What you’ll need:</p>
+        <p className="text-sm font-semibold text-slate-900">What you'll need:</p>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
           <li>A timer</li>
           <li>Space to walk in a straight line</li>
@@ -472,17 +473,43 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
         </ul>
       </div>
       <p className="text-base text-slate-700">
-        After you submit, I’ll send a full breakdown of your Breath Index plus breathwork
+        After you submit, I'll send a full breakdown of your Breath Index plus breathwork
         protocols tailored to your physiology.
       </p>
       <VideoCard videoId="Cq1DpJsAOAM" caption="" />
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-4">
+        <p className="text-sm font-semibold text-slate-900">
+          Please confirm the details below. This is where we will send your personalized feedback on your RBI score.
+        </p>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Input
+            name="firstName"
+            value={formData.firstName}
+            placeholder="First Name"
+            onChange={updateForm}
+          />
+          <Input
+            name="lastName"
+            value={formData.lastName}
+            placeholder="Last Name"
+            onChange={updateForm}
+          />
+        </div>
+        <Input
+          name="email"
+          type="email"
+          value={formData.email}
+          placeholder="Email"
+          onChange={updateForm}
+        />
+      </div>
     </div>
   );
 
   const renderBoltStep = () => (
     <div className="grid gap-8 md:grid-cols-2">
       <div className="space-y-4">
-        <SectionTitle title="Blood Oxygen Level Test" subtitle="Step 1 • BOLT" />
+        <SectionTitle title="Blood Oxygen Level Test" subtitle="Step 2 • BOLT" />
         <p className="text-base text-slate-700">
           Watch and follow along to capture your BOLT score. This reveals how efficiently
           you tolerate drops in blood CO₂.
@@ -505,30 +532,6 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
       </div>
       <div className="space-y-6">
         <VideoCard videoId="9iIKhj7oyeI" caption="" />
-        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-4">
-          <p className="text-sm font-semibold text-slate-900">Results will be sent to:</p>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Input
-              name="firstName"
-              value={formData.firstName}
-              placeholder="First Name"
-              onChange={updateForm}
-            />
-            <Input
-              name="lastName"
-              value={formData.lastName}
-              placeholder="Last Name"
-              onChange={updateForm}
-            />
-          </div>
-          <Input
-            name="email"
-            type="email"
-            value={formData.email}
-            placeholder="Email"
-            onChange={updateForm}
-          />
-        </div>
         <div className="space-y-2">
           <FieldLabel label="BOLT Score" />
           <Input
@@ -549,11 +552,18 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
   const renderCo2Step = () => (
     <div className="grid gap-8 md:grid-cols-2">
       <div className="space-y-4">
-        <SectionTitle title="Carbon Dioxide Tolerance Test" subtitle="Step 2 • CO₂TT" />
+        <SectionTitle title="Carbon Dioxide Tolerance Test" subtitle="Step 3 • CO₂TT" />
         <p className="text-base text-slate-700">
-          This test shows how calm your nervous system stays as CO₂ rises. Watch the demo,
-          follow the cadence, and capture your score.
+          This test is a way to measure how quickly you feel out of breath. Watch the demo, follow the cadence and capture your score.
         </p>
+        <div className="rounded-2xl bg-[#E9F2F5] p-4 text-sm text-slate-700">
+          <p className="font-semibold text-slate-900">How to measure:</p>
+          <ul className="mt-2 space-y-1 list-disc list-inside">
+            <li>Sit upright and take a normal breath in through your nose, then a normal breath out.</li>
+            <li>Inhale deeply through your nose, filling your lungs as much as is comfortably possible.</li>
+            <li>Start your timer as you begin a very slow nasal exhale and keep going until you've emptied your lungs; that time is your CO₂TT score.</li>
+          </ul>
+        </div>
       </div>
       <div className="space-y-6">
         <VideoCard videoId="XGzAGDv6Q6I" caption="" />
@@ -577,11 +587,18 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
   const renderMbtStep = () => (
     <div className="grid gap-8 md:grid-cols-2">
       <div className="space-y-4">
-        <SectionTitle title="Maximum Breathlessness Test" subtitle="Step 3 • MBT" />
+        <SectionTitle title="Maximum Breathlessness Test" subtitle="Step 4 • MBT" />
         <p className="text-base text-slate-700">
-          The MBT stress-tests your ability to stay composed as breathlessness ramps up.
-          Count your steps until you can’t continue.
+          The MBT is the second way to measure how you handle breathlessness. This time with the added element of walking.
         </p>
+        <div className="rounded-2xl bg-[#E9F2F5] p-4 text-sm text-slate-700">
+          <p className="font-semibold text-slate-900">How to measure:</p>
+          <ul className="mt-2 space-y-1 list-disc list-inside">
+            <li>Stand with space to walk and take a normal inhale through your nose, then a normal exhale.</li>
+            <li>Pinch your nose, hold your breath, and start walking at a steady "good hiker's" pace while counting your steps.</li>
+            <li>Continue until you absolutely need to breathe again, then stop and record your total steps as your MBT score.</li>
+          </ul>
+        </div>
       </div>
       <div className="space-y-6">
         <VideoCard videoId="-Kb3O8m8eqk" caption="" />
@@ -614,10 +631,9 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
     return (
       <div className="grid gap-8 md:grid-cols-2">
         <div className="space-y-4">
-          <SectionTitle title="Location of Movement" subtitle="Step 4 • LOM" />
+          <SectionTitle title="Location of Movement" subtitle="Step 5 • LOM" />
           <p className="text-base text-slate-700">
-            Observe where you feel motion as you breathe. Matching your zone tells us how
-            your rib cage coordinate responds under load.
+            Observe where you feel movement as you breathe. Then match your observations with the zone descriptions in the video and options below.
           </p>
         </div>
         <div className="space-y-6">
@@ -641,7 +657,7 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
   const renderRomStep = () => (
     <div className="grid gap-8 lg:grid-cols-2">
       <div className="space-y-4">
-        <SectionTitle title="Range of Motion" subtitle="Step 5 • ROM" />
+        <SectionTitle title="Range of Motion" subtitle="Step 6 • ROM" />
         <p className="text-base text-slate-700">
           Measure your rib cage circumference at full inhale and exhale. We’ll translate
           that into a ROM percentage that reflects how much space you create for oxygen.
@@ -702,7 +718,7 @@ const renderGoalStep = (
   updateForm: (name: keyof FormData, value: string) => void
 ) => (
   <div className="space-y-6">
-    <SectionTitle title="What are you training for?" subtitle="Step 6 • Goal" />
+    <SectionTitle title="What are you training for?" subtitle="Step 7 • Goal" />
     <p className="text-base text-slate-700">
       This helps us benchmark your RBI against the mission ahead.
     </p>
