@@ -68,18 +68,73 @@ export async function POST(request: Request) {
     const badgeIdx = findColumnIndex(header, [badgeHeader]);
 
     if (emailIdx === -1) {
+      console.error('Email column not found. Headers:', header);
       return NextResponse.json({ error: 'Email column not found' }, { status: 500 });
     }
 
+    if (scoreIdx === -1) {
+      console.warn('Score column not found. Headers:', header, 'Looking for:', scoreHeader);
+    }
+    if (gradeIdx === -1) {
+      console.warn('Grade column not found. Headers:', header, 'Looking for:', gradeHeader);
+    }
+    if (badgeIdx === -1) {
+      console.warn('Badge column not found. Headers:', header, 'Looking for:', badgeHeader);
+    }
+
+    const normalizedSearchEmail = normalize(email);
+    console.log('Searching for email:', normalizedSearchEmail, 'in', rows.length - 1, 'rows');
+    console.log('Column indices - Email:', emailIdx, 'Score:', scoreIdx, 'Grade:', gradeIdx, 'Badge:', badgeIdx);
+
+    // Search from bottom to top to get the most recent entry
+    let foundMatch = false;
     for (let i = rows.length - 1; i >= 1; i--) {
       const row = rows[i];
-      if (normalize(row[emailIdx] ?? '') === normalize(email)) {
-        return NextResponse.json({
-          score: scoreIdx >= 0 ? row[scoreIdx] ?? null : null,
-          grade: gradeIdx >= 0 ? row[gradeIdx] ?? null : null,
-          badge: badgeIdx >= 0 ? row[badgeIdx] ?? null : null,
-        });
+      const rowEmail = normalize(row[emailIdx] ?? '');
+      
+      if (rowEmail === normalizedSearchEmail) {
+        const result = {
+          score: scoreIdx >= 0 ? (row[scoreIdx] ?? '').toString().trim() || null : null,
+          grade: gradeIdx >= 0 ? (row[gradeIdx] ?? '').toString().trim() || null : null,
+          badge: badgeIdx >= 0 ? (row[badgeIdx] ?? '').toString().trim() || null : null,
+        };
+        
+        console.log('Found matching row at index', i, 'Result:', result);
+        console.log('Raw row values - Score cell:', row[scoreIdx], 'Grade cell:', row[gradeIdx], 'Badge cell:', row[badgeIdx]);
+        foundMatch = true;
+        return NextResponse.json(result);
       }
+    }
+
+    // If no email match found, try to get the last row as fallback (most recent submission)
+    // This is a fallback in case email matching fails but we know the last row is the new submission
+    if (!foundMatch && rows.length > 1) {
+      const lastRow = rows[rows.length - 1];
+      const lastRowEmail = normalize(lastRow[emailIdx] ?? '');
+      console.warn('No email match found. Using last row as fallback. Last row email:', lastRowEmail, 'Searching for:', normalizedSearchEmail);
+      
+      const fallbackResult = {
+        score: scoreIdx >= 0 ? (lastRow[scoreIdx] ?? '').toString().trim() || null : null,
+        grade: gradeIdx >= 0 ? (lastRow[gradeIdx] ?? '').toString().trim() || null : null,
+        badge: badgeIdx >= 0 ? (lastRow[badgeIdx] ?? '').toString().trim() || null : null,
+      };
+      
+      // Only return fallback if it has at least one non-empty value
+      if (fallbackResult.score || fallbackResult.grade || fallbackResult.badge) {
+        console.log('Returning fallback result from last row:', fallbackResult);
+        return NextResponse.json(fallbackResult);
+      }
+    }
+
+    console.warn('No matching email found and fallback also failed. Searched email:', normalizedSearchEmail);
+    // Log a few sample emails from the sheet for debugging
+    if (rows.length > 1) {
+      const sampleEmails = rows.slice(Math.max(1, rows.length - 5), rows.length).map((row, idx) => ({
+        rowIndex: rows.length - (rows.length - Math.max(1, rows.length - 5)) + idx,
+        email: normalize(row[emailIdx] ?? ''),
+        score: scoreIdx >= 0 ? row[scoreIdx] : 'N/A',
+      }));
+      console.log('Last 5 rows from sheet:', sampleEmails);
     }
 
     return NextResponse.json({ score: null, grade: null, badge: null });

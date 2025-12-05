@@ -319,22 +319,35 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const fetchAssessmentResultWithRetries = async (email: string) => {
   if (!email) return null;
   const maxAttempts = 20;
+  const normalizedEmail = email.trim().toLowerCase();
+  console.log("Fetching assessment result for email:", normalizedEmail);
+  
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await sleep(attempt === 0 ? 2000 : 2500);
     try {
       const response = await fetch("/api/rbi-result", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: normalizedEmail }),
       });
       const payload = await response.json().catch(() => ({}));
+      
+      console.log(`Attempt ${attempt + 1}/${maxAttempts}:`, {
+        status: response.status,
+        payload,
+        email: normalizedEmail,
+      });
+      
       if (response.ok) {
+        // Check if we have at least one non-null value
         if ((payload?.score ?? payload?.grade ?? payload?.badge) !== null) {
-          return {
+          const result = {
             score: payload.score ?? null,
             grade: payload.grade ?? null,
             badge: payload.badge ?? null,
           } as AssessmentResult;
+          console.log("Successfully fetched result:", result);
+          return result;
         }
       } else {
         console.warn("rbi-result fetch failed", response.status, payload);
@@ -343,6 +356,8 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
       console.error("fetch assessment result error", error);
     }
   }
+  
+  console.warn("Failed to fetch assessment result after", maxAttempts, "attempts");
   return null;
 };
 
@@ -370,9 +385,9 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
     body.set("draftResponse", "[]");
     body.set("pageHistory", "0,1,2,3,4,5,6");
     body.set("fbzx", Date.now().toString());
-    body.set(googleEntryIds.firstName, formData.firstName);
-    body.set(googleEntryIds.lastName, formData.lastName);
-    body.set(googleEntryIds.email, formData.email);
+    body.set(googleEntryIds.firstName, formData.firstName.trim());
+    body.set(googleEntryIds.lastName, formData.lastName.trim());
+    body.set(googleEntryIds.email, formData.email.trim());
     body.set(googleEntryIds.goalType, formData.goalType);
     body.set(googleEntryIds.boltScore, formData.boltScore);
     body.set(googleEntryIds.co2Score, formData.co2ttScore);
