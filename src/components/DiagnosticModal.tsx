@@ -38,8 +38,6 @@ const brandNavy = "#0A4367";
 const modalSteps = 9;
 const totalTests = 6;
 const webhookUrl = process.env.NEXT_PUBLIC_DIAGNOSTIC_WEBHOOK_URL;
-const bookingUrl =
-  process.env.NEXT_PUBLIC_RBI_CTA_URL || "https://calendly.com/anthonylorubbio/initial-consultation-high-altitude-breathwork-training";
 const googleFormUrl =
   process.env.NEXT_PUBLIC_GOOGLE_FORM_URL ||
   "https://docs.google.com/forms/d/e/1FAIpQLSfdvHwTAuYDUZrqKntNaIcZbNM_RPothRiZgcMbwFPeb8Mx0A/formResponse";
@@ -81,12 +79,6 @@ const initialForm: FormData = {
 const youtubeParams =
   "?autoplay=0&mute=0&rel=0&modestbranding=1&playsinline=1&color=white";
 
-const formatSeconds = (value: string) =>
-  value ? `${value.replace(/[^0-9.]/g, "")}s` : "–";
-
-const formatSteps = (value: string) =>
-  value ? `${value.replace(/[^0-9.]/g, "")} steps` : "–";
-
 const computeRomPercent = (inhale: string, exhale: string) => {
   const inhaleNum = Number(inhale);
   const exhaleNum = Number(exhale);
@@ -96,13 +88,6 @@ const computeRomPercent = (inhale: string, exhale: string) => {
   const rom = ((inhaleNum - exhaleNum) / exhaleNum) * 1000;
   if (!Number.isFinite(rom)) return null;
   return rom.toFixed(1);
-};
-
-const getScoreTag = (value: number, thresholds: number[]) => {
-  if (Number.isNaN(value)) return "Needs Attention";
-  if (value >= thresholds[1]) return "Dialed In";
-  if (value >= thresholds[0]) return "Developing";
-  return "Needs Attention";
 };
 
 const motionVariants = {
@@ -205,7 +190,6 @@ const Input = ({
 
 const RadioOption = ({
   label,
-  value,
   selected,
   onSelect,
 }: {
@@ -314,63 +298,63 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     };
   };
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const fetchAssessmentResultWithRetries = async (email: string) => {
-  if (!email) return null;
-  const maxAttempts = 20;
-  const normalizedEmail = email.trim().toLowerCase();
-  console.log("Fetching assessment result for email:", normalizedEmail);
-  
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await sleep(attempt === 0 ? 2000 : 2500);
-    try {
-      const response = await fetch("/api/rbi-result", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: normalizedEmail }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      
-      console.log(`Attempt ${attempt + 1}/${maxAttempts}:`, {
-        status: response.status,
-        payload,
-        email: normalizedEmail,
-      });
-      
-      if (response.ok) {
-        // Check if we have an error in the payload
-        if (payload?.error) {
-          console.warn(`Attempt ${attempt + 1}: API returned error:`, payload.error);
-          // Continue retrying on error
-          continue;
-        }
+  const fetchAssessmentResultWithRetries = async (email: string) => {
+    if (!email) return null;
+    const maxAttempts = 20;
+    const normalizedEmail = email.trim().toLowerCase();
+    console.log("Fetching assessment result for email:", normalizedEmail);
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await sleep(attempt === 0 ? 2000 : 2500);
+      try {
+        const response = await fetch("/api/rbi-result", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: normalizedEmail }),
+        });
+        const payload = await response.json().catch(() => ({}));
         
-        // Check if we have at least one non-null, non-empty value
-        const hasResult = payload?.score || payload?.grade || payload?.badge;
-        if (hasResult) {
-          const result = {
-            score: payload.score ?? null,
-            grade: payload.grade ?? null,
-            badge: payload.badge ?? null,
-          } as AssessmentResult;
-          console.log("Successfully fetched result:", result);
-          return result;
+        console.log(`Attempt ${attempt + 1}/${maxAttempts}:`, {
+          status: response.status,
+          payload,
+          email: normalizedEmail,
+        });
+        
+        if (response.ok) {
+          // Check if we have an error in the payload
+          if (payload?.error) {
+            console.warn(`Attempt ${attempt + 1}: API returned error:`, payload.error);
+            // Continue retrying on error
+            continue;
+          }
+          
+          // Check if we have at least one non-null, non-empty value
+          const hasResult = payload?.score || payload?.grade || payload?.badge;
+          if (hasResult) {
+            const result = {
+              score: payload.score ?? null,
+              grade: payload.grade ?? null,
+              badge: payload.badge ?? null,
+            } as AssessmentResult;
+            console.log("Successfully fetched result:", result);
+            return result;
+          } else {
+            console.log(`Attempt ${attempt + 1}: No results yet (all null/empty), will retry...`);
+          }
         } else {
-          console.log(`Attempt ${attempt + 1}: No results yet (all null/empty), will retry...`);
+          console.warn("rbi-result fetch failed", response.status, payload);
+          // Don't give up on first error, continue retrying
         }
-      } else {
-        console.warn("rbi-result fetch failed", response.status, payload);
-        // Don't give up on first error, continue retrying
+      } catch (error) {
+        console.error("fetch assessment result error", error);
       }
-    } catch (error) {
-      console.error("fetch assessment result error", error);
     }
-  }
-  
-  console.warn("Failed to fetch assessment result after", maxAttempts, "attempts");
-  return null;
-};
+    
+    console.warn("Failed to fetch assessment result after", maxAttempts, "attempts");
+    return null;
+  };
 
   const recordLandingSignup = async () => {
     try {
@@ -893,7 +877,8 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
       default:
         return null;
     }
-  }, [step, formData, romPercent, loadingMessageIndex]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, formData, romPercent, loadingMessageIndex, assessmentResult]);
 
   const isLoadingStep = step === modalSteps - 1;
   const isFinalStep = step === modalSteps;
