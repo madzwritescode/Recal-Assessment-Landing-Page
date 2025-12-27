@@ -339,8 +339,16 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
       });
       
       if (response.ok) {
-        // Check if we have at least one non-null value
-        if ((payload?.score ?? payload?.grade ?? payload?.badge) !== null) {
+        // Check if we have an error in the payload
+        if (payload?.error) {
+          console.warn(`Attempt ${attempt + 1}: API returned error:`, payload.error);
+          // Continue retrying on error
+          continue;
+        }
+        
+        // Check if we have at least one non-null, non-empty value
+        const hasResult = payload?.score || payload?.grade || payload?.badge;
+        if (hasResult) {
           const result = {
             score: payload.score ?? null,
             grade: payload.grade ?? null,
@@ -348,9 +356,12 @@ const fetchAssessmentResultWithRetries = async (email: string) => {
           } as AssessmentResult;
           console.log("Successfully fetched result:", result);
           return result;
+        } else {
+          console.log(`Attempt ${attempt + 1}: No results yet (all null/empty), will retry...`);
         }
       } else {
         console.warn("rbi-result fetch failed", response.status, payload);
+        // Don't give up on first error, continue retrying
       }
     } catch (error) {
       console.error("fetch assessment result error", error);
@@ -794,13 +805,17 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
       <div className="space-y-8">
         <SectionTitle title="Your RBI Snapshot" subtitle="Results" />
         <p className="text-base text-slate-700">
-          We’ve emailed you the full breakdown of your strongest and weakest breathing links.
-          Here’s the top line from your RBI dashboard.
+          Your complete RBI breakdown has been sent to your inbox. Here's a quick snapshot of your results:
         </p>
         {!assessmentResult && (
-          <p className="text-sm text-amber-600">
-            Still calibrating live data from the sheet... please check your inbox if this takes longer than a minute.
-          </p>
+          <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
+            <p className="text-sm text-amber-800 font-medium">
+              Results are still being calculated...
+            </p>
+            <p className="text-xs text-amber-700 mt-1">
+              Your full report will arrive in your inbox within the next minute. Check your spam folder if you don't see it.
+            </p>
+          </div>
         )}
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0A4367] to-[#144C74] p-6 text-center text-white shadow">
@@ -828,33 +843,27 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
             <p className="text-sm italic text-slate-600">“{formData.goalDetail}”</p>
           )}
         </div>
-        <div className="rounded-3xl bg-gradient-to-r from-[#0A4367] to-[#144C74] p-6 text-white shadow-xl">
-          <p className="text-lg font-semibold">Your next move</p>
-          <p className="mt-2 text-sm text-slate-100">
-            Want to see which link is strongest vs. weakest—and the drill that fixes it?
-            Your full RBI dossier is waiting in your inbox right now.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <p className="text-sm text-slate-100">
-              Check your inbox for the full playbook. Want me to walk through it with you?
+        <div className="rounded-3xl bg-gradient-to-r from-[#0A4367] to-[#144C74] p-8 text-white shadow-xl">
+          <div className="text-center space-y-4">
+            <p className="text-2xl font-semibold">Your Complete Breakdown is Waiting</p>
+            <p className="text-base text-slate-100">
+              Want to know which breathing link is your strongest vs. weakest—and the exact drill that fixes it?
             </p>
+            <div className="mt-6 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 p-6">
+              <p className="text-lg font-semibold mb-2">📧 Check Your Inbox</p>
+              <p className="text-sm text-slate-100">
+                Your full RBI dossier with personalized insights, weakest links, and targeted breathwork protocols has been sent to your email.
+              </p>
+              <p className="text-xs text-slate-200 mt-3 italic">
+                Don't see it? Check your spam folder—it should arrive within the next minute.
+              </p>
+            </div>
             <button
               onClick={handleClose}
-              className="rounded-2xl border border-white/70 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+              className="mt-4 rounded-2xl bg-white/90 px-8 py-3 text-sm font-semibold text-[#0A4367] transition hover:bg-white"
             >
               Close
             </button>
-            <a
-              href={bookingUrl}
-              target="_blank"
-              rel="noreferrer"
-              id="diagnostic-modal-book-call"
-              data-gtm="diagnostic-modal-book-call"
-              onClick={() => trackEvent("diagnostic_modal_cta", "book_call")}
-              className="inline-flex items-center justify-center rounded-2xl bg-white/90 px-6 py-3 text-sm font-semibold text-[#0A4367] transition hover:bg-white"
-            >
-              Book a Free Call
-            </a>
           </div>
         </div>
       </div>

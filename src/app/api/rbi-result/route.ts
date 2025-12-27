@@ -86,8 +86,39 @@ export async function POST(request: Request) {
     console.log('Searching for email:', normalizedSearchEmail, 'in', rows.length - 1, 'rows');
     console.log('Column indices - Email:', emailIdx, 'Score:', scoreIdx, 'Grade:', gradeIdx, 'Badge:', badgeIdx);
 
-    // Search from bottom to top to get the most recent entry
-    let foundMatch = false;
+    // Strategy: Check the last row first (most recent submission), then search by email
+    // This is more reliable since the most recent submission is always the last row
+    if (rows.length > 1) {
+      const lastRow = rows[rows.length - 1];
+      const lastRowEmail = normalize(lastRow[emailIdx] ?? '');
+      
+      // Check if last row has calculated values (Apps Script has finished)
+      const lastRowResult = {
+        score: scoreIdx >= 0 ? (lastRow[scoreIdx] ?? '').toString().trim() || null : null,
+        grade: gradeIdx >= 0 ? (lastRow[gradeIdx] ?? '').toString().trim() || null : null,
+        badge: badgeIdx >= 0 ? (lastRow[badgeIdx] ?? '').toString().trim() || null : null,
+      };
+      
+      console.log('Last row check - Email:', lastRowEmail, 'Result:', lastRowResult, 'Raw values:', {
+        scoreRaw: lastRow[scoreIdx],
+        gradeRaw: lastRow[gradeIdx],
+        badgeRaw: lastRow[badgeIdx],
+      });
+      
+      // If last row has calculated values, return it (most recent submission)
+      if (lastRowResult.score || lastRowResult.grade || lastRowResult.badge) {
+        console.log('Returning last row result (has calculated values):', lastRowResult);
+        return NextResponse.json(lastRowResult);
+      }
+      
+      // If last row email matches but no values yet, still return it (Apps Script processing)
+      if (lastRowEmail === normalizedSearchEmail) {
+        console.log('Last row email matches but no calculated values yet - Apps Script may still be processing');
+        return NextResponse.json(lastRowResult);
+      }
+    }
+
+    // Fallback: Search from bottom to top for email match (in case last row wasn't the right one)
     for (let i = rows.length - 1; i >= 1; i--) {
       const row = rows[i];
       const rowEmail = normalize(row[emailIdx] ?? '');
@@ -101,28 +132,7 @@ export async function POST(request: Request) {
         
         console.log('Found matching row at index', i, 'Result:', result);
         console.log('Raw row values - Score cell:', row[scoreIdx], 'Grade cell:', row[gradeIdx], 'Badge cell:', row[badgeIdx]);
-        foundMatch = true;
         return NextResponse.json(result);
-      }
-    }
-
-    // If no email match found, try to get the last row as fallback (most recent submission)
-    // This is a fallback in case email matching fails but we know the last row is the new submission
-    if (!foundMatch && rows.length > 1) {
-      const lastRow = rows[rows.length - 1];
-      const lastRowEmail = normalize(lastRow[emailIdx] ?? '');
-      console.warn('No email match found. Using last row as fallback. Last row email:', lastRowEmail, 'Searching for:', normalizedSearchEmail);
-      
-      const fallbackResult = {
-        score: scoreIdx >= 0 ? (lastRow[scoreIdx] ?? '').toString().trim() || null : null,
-        grade: gradeIdx >= 0 ? (lastRow[gradeIdx] ?? '').toString().trim() || null : null,
-        badge: badgeIdx >= 0 ? (lastRow[badgeIdx] ?? '').toString().trim() || null : null,
-      };
-      
-      // Only return fallback if it has at least one non-empty value
-      if (fallbackResult.score || fallbackResult.grade || fallbackResult.badge) {
-        console.log('Returning fallback result from last row:', fallbackResult);
-        return NextResponse.json(fallbackResult);
       }
     }
 
