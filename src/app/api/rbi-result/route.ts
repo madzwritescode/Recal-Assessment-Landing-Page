@@ -72,88 +72,81 @@ export async function POST(request: Request) {
 
     const normalizedSearchEmail = normalize(email);
     
-    // SIMPLIFIED APPROACH: Only check the LAST row (most recent submission)
-    // This is the newest entry in the sheet - if it matches the user's email, it's their submission
-    if (rows.length > 1) {
-      const lastRow = rows[rows.length - 1];
-      const lastRowEmail = normalize(lastRow[emailIdx] ?? '');
+    // NEW APPROACH: Search ALL rows from bottom to top (most recent first)
+    // Find the most recent row with matching email that has calculated values
+    console.log('=== API: Searching for email ===');
+    console.log('Searching for:', normalizedSearchEmail);
+    console.log('Total rows:', rows.length);
+    console.log('Column indices:', { emailIdx, scoreIdx, gradeIdx, badgeIdx });
+    
+    let mostRecentMatch = null;
+    let mostRecentMatchIndex = -1;
+    
+    // Search from bottom to top (most recent first)
+    for (let i = rows.length - 1; i >= 1; i--) {
+      const row = rows[i];
+      const rowEmail = normalize(row[emailIdx] ?? '');
       
-      // Get raw cell values for debugging
-      const rawScore = scoreIdx >= 0 ? lastRow[scoreIdx] : undefined;
-      const rawGrade = gradeIdx >= 0 ? lastRow[gradeIdx] : undefined;
-      const rawBadge = badgeIdx >= 0 ? lastRow[badgeIdx] : undefined;
-      
-      const result = {
-        score: rawScore ? rawScore.toString().trim() || null : null,
-        grade: rawGrade ? rawGrade.toString().trim() || null : null,
-        badge: rawBadge ? rawBadge.toString().trim() || null : null,
-      };
-      
-      const hasCalculatedValues = !!(result.score || result.grade || result.badge);
-      
-      // DEBUG LOGGING
-      console.log('=== API DEBUG: Last Row Check ===');
-      console.log('Last row index:', rows.length - 1);
-      console.log('Last row email:', lastRowEmail);
-      console.log('Searching for:', normalizedSearchEmail);
-      console.log('Emails match?', lastRowEmail === normalizedSearchEmail);
-      console.log('Column indices:', { emailIdx, scoreIdx, gradeIdx, badgeIdx });
-      console.log('Raw cell values:', {
-        score: rawScore,
-        grade: rawGrade,
-        badge: rawBadge,
-        scoreType: typeof rawScore,
-        gradeType: typeof rawGrade,
-        badgeType: typeof rawBadge,
-      });
-      console.log('Processed result:', result);
-      console.log('Has calculated values?', hasCalculatedValues);
-      console.log('Last row (first 15 cells):', lastRow.slice(0, 15));
-      console.log('Full header row:', header);
-      
-      // If the last row email matches, this is the user's submission
-      if (lastRowEmail === normalizedSearchEmail) {
-        if (hasCalculatedValues) {
-          // Email matches and has calculated values - return the result
-          console.log('✅ Returning result:', result);
-          return NextResponse.json(result);
-        } else {
-          // Email matches but no calculated values yet - Apps Script still processing
-          console.log('⏳ Email matches but no calculated values in columns M, N, O yet');
-          // Return debug info in development
-          const debugInfo = process.env.NODE_ENV === 'development' ? {
-            debug: {
-              emailMatch: true,
-              lastRowIndex: rows.length - 1,
-              columnIndices: { emailIdx, scoreIdx, gradeIdx, badgeIdx },
-              rawValues: { score: rawScore, grade: rawGrade, badge: rawBadge },
-              processedResult: result,
-            }
-          } : {};
-          return NextResponse.json({ score: null, grade: null, badge: null, ...debugInfo });
-        }
-      } else {
-        // Last row email doesn't match - either:
-        // 1. Someone else just submitted (their row is now last)
-        // 2. User's submission hasn't been written to sheet yet
-        console.log('❌ Last row email does not match');
-        console.log('Last row email:', `"${lastRowEmail}"`);
-        console.log('Searching for:', `"${normalizedSearchEmail}"`);
-        // Return debug info in development
-        const debugInfo = process.env.NODE_ENV === 'development' ? {
-          debug: {
-            emailMatch: false,
-            lastRowEmail,
-            searchingFor: normalizedSearchEmail,
-            lastRowIndex: rows.length - 1,
-            columnIndices: { emailIdx, scoreIdx, gradeIdx, badgeIdx },
-            rawValues: { score: rawScore, grade: rawGrade, badge: rawBadge },
-            lastRowFirst15Cells: lastRow.slice(0, 15),
+      // Check if email matches
+      if (rowEmail === normalizedSearchEmail) {
+        const rawScore = scoreIdx >= 0 ? row[scoreIdx] : undefined;
+        const rawGrade = gradeIdx >= 0 ? row[gradeIdx] : undefined;
+        const rawBadge = badgeIdx >= 0 ? row[badgeIdx] : undefined;
+        
+        const result = {
+          score: rawScore ? rawScore.toString().trim() || null : null,
+          grade: rawGrade ? rawGrade.toString().trim() || null : null,
+          badge: rawBadge ? rawBadge.toString().trim() || null : null,
+        };
+        
+        const hasCalculatedValues = !!(result.score || result.grade || result.badge);
+        
+        console.log(`Row ${i}: Email match found. Has calculated values:`, hasCalculatedValues);
+        console.log(`Row ${i}: Raw values:`, { score: rawScore, grade: rawGrade, badge: rawBadge });
+        
+        // Store the first match (most recent since we go bottom to top)
+        if (mostRecentMatch === null) {
+          mostRecentMatch = result;
+          mostRecentMatchIndex = i;
+          
+          // If this match has calculated values, return it immediately
+          if (hasCalculatedValues) {
+            console.log(`✅ Found match at row ${i} with calculated values. Returning:`, result);
+            return NextResponse.json(result);
           }
-        } : {};
-        return NextResponse.json({ score: null, grade: null, badge: null, ...debugInfo });
+        }
       }
     }
+    
+    // If we found a match but no calculated values yet, return null (still processing)
+    if (mostRecentMatch !== null) {
+      console.log(`⏳ Found match at row ${mostRecentMatchIndex} but no calculated values yet (Apps Script still processing)`);
+      return NextResponse.json({ 
+        score: null, 
+        grade: null, 
+        badge: null,
+        debug: {
+          found: true,
+          rowIndex: mostRecentMatchIndex,
+          hasCalculatedValues: false,
+          columnIndices: { emailIdx, scoreIdx, gradeIdx, badgeIdx },
+        }
+      });
+    }
+    
+    // No match found
+    console.log('❌ No email match found in sheet');
+    return NextResponse.json({ 
+      score: null, 
+      grade: null, 
+      badge: null,
+      debug: {
+        found: false,
+        searchingFor: normalizedSearchEmail,
+        totalRows: rows.length,
+        columnIndices: { emailIdx, scoreIdx, gradeIdx, badgeIdx },
+      }
+    });
 
     // No data rows
     return NextResponse.json({ score: null, grade: null, badge: null });

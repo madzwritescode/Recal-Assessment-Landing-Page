@@ -300,18 +300,18 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  // SIMPLIFIED: Fetch result by checking only the last row (most recent submission)
-  // Retry up to 3 times over 5 seconds to allow Apps Script time to calculate
+  // Fetch result by searching all rows for matching email
+  // Retry up to 10 times over 30 seconds to allow Apps Script time to calculate
   const fetchAssessmentResultWithRetries = async (email: string) => {
     if (!email) return null;
     
     const normalizedEmail = email.trim().toLowerCase();
-    const maxAttempts = 3;
-    const delays = [2000, 3000]; // 2s then 3s = 5 seconds total
+    const maxAttempts = 10;
+    const delays = [2000, 2000, 3000, 3000, 4000, 4000, 5000, 5000, 5000]; // ~30 seconds total
     
     console.log("=== FETCHING ASSESSMENT RESULT ===");
     console.log("Email:", normalizedEmail);
-    console.log("Will retry up to 3 times over 5 seconds");
+    console.log("Will retry up to 10 times over 30 seconds");
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       // Wait before each attempt except the first one
