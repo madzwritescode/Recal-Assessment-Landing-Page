@@ -165,7 +165,7 @@ export async function POST(request: Request) {
     console.log('=== SEARCHING BY EMAIL (BOTTOM TO TOP - MOST RECENT FIRST) ===');
     let mostRecentMatch = null;
     let mostRecentMatchIndex = -1;
-    const allMatches: Array<{ index: number; result: any; hasValues: boolean }> = [];
+    const allMatches: Array<{ index: number; result: { score: string | null; grade: string | null; badge: string | null }; hasValues: boolean }> = [];
     
     for (let i = rows.length - 1; i >= 1; i--) {
       const row = rows[i];
