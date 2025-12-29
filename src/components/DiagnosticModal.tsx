@@ -300,83 +300,65 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  // SIMPLIFIED: Fetch result by checking only the last row (most recent submission)
+  // Retry up to 3 times over 5 seconds to allow Apps Script time to calculate
   const fetchAssessmentResultWithRetries = async (email: string) => {
     if (!email) return null;
-    // Retry for up to 30 seconds to allow Apps Script time to calculate
-    // Apps Script typically takes 5-15 seconds to calculate and write results
-    const maxAttempts = 10;
-    const delays = [3000, 3000, 3000, 3000, 3000, 3000, 3000, 3000, 3000]; // 3s between each attempt = ~30s total
-    // Normalize email: trim and lowercase, but preserve the exact format sent to Google Form
+    
     const normalizedEmail = email.trim().toLowerCase();
+    const maxAttempts = 3;
+    const delays = [2000, 3000]; // 2s then 3s = 5 seconds total
+    
     console.log("=== FETCHING ASSESSMENT RESULT ===");
-    console.log("Original email:", email);
-    console.log("Normalized email:", normalizedEmail);
-    console.log("Will retry for up to 30 seconds (10 attempts) to allow Apps Script time to calculate");
+    console.log("Email:", normalizedEmail);
+    console.log("Will retry up to 3 times over 5 seconds");
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       // Wait before each attempt except the first one
       if (attempt > 0) {
         await sleep(delays[attempt - 1]);
       }
+      
       try {
         const response = await fetch("/api/rbi-result", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: normalizedEmail }),
         });
+        
+        if (!response.ok) {
+          console.warn(`Attempt ${attempt + 1}: API error`, response.status);
+          continue;
+        }
+        
         const payload = await response.json().catch(() => ({}));
         
-        console.log(`Attempt ${attempt + 1}/${maxAttempts}:`, {
-          status: response.status,
-          payload,
-          email: normalizedEmail,
-        });
-        console.log(`Attempt ${attempt + 1} - Full payload:`, JSON.stringify(payload, null, 2));
+        // Check for API errors
+        if (payload?.error) {
+          console.warn(`Attempt ${attempt + 1}: API error:`, payload.error);
+          continue;
+        }
         
-        if (response.ok) {
-          // Check if we have an error in the payload
-          if (payload?.error) {
-            console.warn(`Attempt ${attempt + 1}: API returned error:`, payload.error);
-            // Continue retrying on error
-            continue;
-          }
-          
-          // Check if we have at least one non-null, non-empty value
-          const hasResult = payload?.score || payload?.grade || payload?.badge;
-          console.log(`Attempt ${attempt + 1} - Has result?`, hasResult);
-          console.log(`Attempt ${attempt + 1} - Score:`, payload?.score, 'Type:', typeof payload?.score);
-          console.log(`Attempt ${attempt + 1} - Grade:`, payload?.grade, 'Type:', typeof payload?.grade);
-          console.log(`Attempt ${attempt + 1} - Badge:`, payload?.badge, 'Type:', typeof payload?.badge);
-          
-          if (hasResult) {
-            const result = {
-              score: payload.score ?? null,
-              grade: payload.grade ?? null,
-              badge: payload.badge ?? null,
-            } as AssessmentResult;
-            console.log("✅ Successfully fetched result:", result);
-            return result;
-          } else {
-            console.log(`Attempt ${attempt + 1}: No results yet (all null/empty), will retry...`);
-            console.log(`Attempt ${attempt + 1}: Payload breakdown:`, {
-              score: payload?.score,
-              grade: payload?.grade,
-              badge: payload?.badge,
-              scoreTruthy: !!payload?.score,
-              gradeTruthy: !!payload?.grade,
-              badgeTruthy: !!payload?.badge,
-            });
-          }
+        // Check if we have calculated values
+        const hasResult = payload?.score || payload?.grade || payload?.badge;
+        
+        if (hasResult) {
+          const result = {
+            score: payload.score ?? null,
+            grade: payload.grade ?? null,
+            badge: payload.badge ?? null,
+          } as AssessmentResult;
+          console.log(`✅ Successfully fetched result on attempt ${attempt + 1}:`, result);
+          return result;
         } else {
-          console.warn("rbi-result fetch failed", response.status, payload);
-          // Don't give up on first error, continue retrying
+          console.log(`Attempt ${attempt + 1}: Last row doesn't have calculated values yet (still processing)`);
         }
       } catch (error) {
-        console.error("fetch assessment result error", error);
+        console.error(`Attempt ${attempt + 1}: Fetch error:`, error);
       }
     }
     
-    console.warn("Failed to fetch assessment result after", maxAttempts, "attempts");
+    console.warn("No results found after", maxAttempts, "attempts - Apps Script may still be processing");
     return null;
   };
 
