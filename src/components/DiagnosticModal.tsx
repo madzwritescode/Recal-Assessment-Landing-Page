@@ -333,6 +333,8 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
         
         const payload = await response.json().catch(() => ({}));
         
+        console.log(`Attempt ${attempt + 1} - Full API response:`, JSON.stringify(payload, null, 2));
+        
         // Check for API errors
         if (payload?.error) {
           console.warn(`Attempt ${attempt + 1}: API error:`, payload.error);
@@ -341,6 +343,16 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
         
         // Check if we have calculated values
         const hasResult = payload?.score || payload?.grade || payload?.badge;
+        
+        console.log(`Attempt ${attempt + 1} - Values check:`, {
+          score: payload?.score,
+          grade: payload?.grade,
+          badge: payload?.badge,
+          scoreTruthy: !!payload?.score,
+          gradeTruthy: !!payload?.grade,
+          badgeTruthy: !!payload?.badge,
+          hasResult,
+        });
         
         if (hasResult) {
           const result = {
@@ -352,6 +364,7 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
           return result;
         } else {
           console.log(`Attempt ${attempt + 1}: Last row doesn't have calculated values yet (still processing)`);
+          console.log(`Attempt ${attempt + 1}: Raw payload:`, payload);
         }
       } catch (error) {
         console.error(`Attempt ${attempt + 1}: Fetch error:`, error);
