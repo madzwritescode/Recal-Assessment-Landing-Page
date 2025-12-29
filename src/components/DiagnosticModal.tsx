@@ -335,6 +335,11 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
         
         console.log(`Attempt ${attempt + 1} - Full API response:`, JSON.stringify(payload, null, 2));
         
+        // Log debug info if available
+        if (payload?.debug) {
+          console.log(`Attempt ${attempt + 1} - DEBUG INFO from API:`, payload.debug);
+        }
+        
         // Check for API errors
         if (payload?.error) {
           console.warn(`Attempt ${attempt + 1}: API error:`, payload.error);
@@ -364,7 +369,14 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
           return result;
         } else {
           console.log(`Attempt ${attempt + 1}: Last row doesn't have calculated values yet (still processing)`);
-          console.log(`Attempt ${attempt + 1}: Raw payload:`, payload);
+          if (payload?.debug) {
+            console.log(`Attempt ${attempt + 1}: Debug - Email match:`, payload.debug.emailMatch);
+            if (!payload.debug.emailMatch) {
+              console.log(`⚠️ Email mismatch! Last row email: "${payload.debug.lastRowEmail}", Searching for: "${payload.debug.searchingFor}"`);
+            } else {
+              console.log(`⚠️ Email matches but calculated columns (M, N, O) are empty. Apps Script may still be processing.`);
+            }
+          }
         }
       } catch (error) {
         console.error(`Attempt ${attempt + 1}: Fetch error:`, error);

@@ -120,7 +120,17 @@ export async function POST(request: Request) {
         } else {
           // Email matches but no calculated values yet - Apps Script still processing
           console.log('⏳ Email matches but no calculated values in columns M, N, O yet');
-          return NextResponse.json({ score: null, grade: null, badge: null });
+          // Return debug info in development
+          const debugInfo = process.env.NODE_ENV === 'development' ? {
+            debug: {
+              emailMatch: true,
+              lastRowIndex: rows.length - 1,
+              columnIndices: { emailIdx, scoreIdx, gradeIdx, badgeIdx },
+              rawValues: { score: rawScore, grade: rawGrade, badge: rawBadge },
+              processedResult: result,
+            }
+          } : {};
+          return NextResponse.json({ score: null, grade: null, badge: null, ...debugInfo });
         }
       } else {
         // Last row email doesn't match - either:
@@ -129,8 +139,19 @@ export async function POST(request: Request) {
         console.log('❌ Last row email does not match');
         console.log('Last row email:', `"${lastRowEmail}"`);
         console.log('Searching for:', `"${normalizedSearchEmail}"`);
-        // Return null - don't search old rows to avoid returning stale data
-        return NextResponse.json({ score: null, grade: null, badge: null });
+        // Return debug info in development
+        const debugInfo = process.env.NODE_ENV === 'development' ? {
+          debug: {
+            emailMatch: false,
+            lastRowEmail,
+            searchingFor: normalizedSearchEmail,
+            lastRowIndex: rows.length - 1,
+            columnIndices: { emailIdx, scoreIdx, gradeIdx, badgeIdx },
+            rawValues: { score: rawScore, grade: rawGrade, badge: rawBadge },
+            lastRowFirst15Cells: lastRow.slice(0, 15),
+          }
+        } : {};
+        return NextResponse.json({ score: null, grade: null, badge: null, ...debugInfo });
       }
     }
 
