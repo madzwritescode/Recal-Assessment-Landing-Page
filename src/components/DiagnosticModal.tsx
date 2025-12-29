@@ -302,15 +302,21 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
 
   const fetchAssessmentResultWithRetries = async (email: string) => {
     if (!email) return null;
-    const maxAttempts = 20;
+    // Only retry for 5 seconds total (3 attempts: immediate, then 2s, then 3s = 5s total)
+    const maxAttempts = 3;
+    const delays = [2000, 3000]; // Wait 2s after first attempt, then 3s after second = 5s total
     // Normalize email: trim and lowercase, but preserve the exact format sent to Google Form
     const normalizedEmail = email.trim().toLowerCase();
     console.log("=== FETCHING ASSESSMENT RESULT ===");
     console.log("Original email:", email);
     console.log("Normalized email:", normalizedEmail);
+    console.log("Will retry for up to 5 seconds (2 attempts)");
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await sleep(attempt === 0 ? 2000 : 2500);
+      // Wait before each attempt except the first one
+      if (attempt > 0) {
+        await sleep(delays[attempt - 1]);
+      }
       try {
         const response = await fetch("/api/rbi-result", {
           method: "POST",
@@ -461,7 +467,12 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
             })
           : Promise.resolve(),
       ]);
-      const result = await fetchAssessmentResultWithRetries(formData.email.trim());
+      // Use the exact same email format that was sent to Google Form
+      const emailForLookup = formData.email.trim();
+      console.log("=== SUBMITTING ASSESSMENT ===");
+      console.log("Email sent to Google Form:", emailForLookup);
+      console.log("Email will be used for result lookup:", emailForLookup);
+      const result = await fetchAssessmentResultWithRetries(emailForLookup);
       if (result) {
         setAssessmentResult(result);
       }
