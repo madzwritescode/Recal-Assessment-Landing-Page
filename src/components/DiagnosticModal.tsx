@@ -303,8 +303,11 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
   const fetchAssessmentResultWithRetries = async (email: string) => {
     if (!email) return null;
     const maxAttempts = 20;
+    // Normalize email: trim and lowercase, but preserve the exact format sent to Google Form
     const normalizedEmail = email.trim().toLowerCase();
-    console.log("Fetching assessment result for email:", normalizedEmail);
+    console.log("=== FETCHING ASSESSMENT RESULT ===");
+    console.log("Original email:", email);
+    console.log("Normalized email:", normalizedEmail);
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       await sleep(attempt === 0 ? 2000 : 2500);

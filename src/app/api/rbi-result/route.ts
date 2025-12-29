@@ -83,42 +83,61 @@ export async function POST(request: Request) {
     }
 
     const normalizedSearchEmail = normalize(email);
+    console.log('=== RBI RESULT API CALL ===');
     console.log('Searching for email:', normalizedSearchEmail, 'in', rows.length - 1, 'rows');
     console.log('Column indices - Email:', emailIdx, 'Score:', scoreIdx, 'Grade:', gradeIdx, 'Badge:', badgeIdx);
+    console.log('Column headers:', {
+      email: header[emailIdx],
+      score: header[scoreIdx],
+      grade: header[gradeIdx],
+      badge: header[badgeIdx],
+    });
 
-    // Strategy: Check the last row first (most recent submission), then search by email
-    // This is more reliable since the most recent submission is always the last row
+    // Strategy: ALWAYS check the LAST row first (most recent submission)
+    // This is the most reliable since the last row is always the newest entry
     if (rows.length > 1) {
       const lastRow = rows[rows.length - 1];
       const lastRowEmail = normalize(lastRow[emailIdx] ?? '');
       
-      // Check if last row has calculated values (Apps Script has finished)
       const lastRowResult = {
         score: scoreIdx >= 0 ? (lastRow[scoreIdx] ?? '').toString().trim() || null : null,
         grade: gradeIdx >= 0 ? (lastRow[gradeIdx] ?? '').toString().trim() || null : null,
         badge: badgeIdx >= 0 ? (lastRow[badgeIdx] ?? '').toString().trim() || null : null,
       };
       
-      console.log('Last row check - Email:', lastRowEmail, 'Result:', lastRowResult, 'Raw values:', {
+      console.log('=== LAST ROW CHECK (MOST RECENT) ===');
+      console.log('Last row index:', rows.length - 1);
+      console.log('Last row email:', lastRowEmail);
+      console.log('Searching for email:', normalizedSearchEmail);
+      console.log('Emails match?', lastRowEmail === normalizedSearchEmail);
+      console.log('Last row result:', lastRowResult);
+      console.log('Raw cell values:', {
         scoreRaw: lastRow[scoreIdx],
         gradeRaw: lastRow[gradeIdx],
         badgeRaw: lastRow[badgeIdx],
+        scoreIdx,
+        gradeIdx,
+        badgeIdx,
       });
       
-      // If last row has calculated values, return it (most recent submission)
+      // PRIORITY 1: If last row has calculated values, return it (most recent submission)
+      // This is the most reliable - the last row is always the newest entry
       if (lastRowResult.score || lastRowResult.grade || lastRowResult.badge) {
-        console.log('Returning last row result (has calculated values):', lastRowResult);
+        console.log('✅ Last row has calculated values - returning as most recent submission');
+        console.log('Note: This is the most recent entry in the sheet, regardless of email match');
         return NextResponse.json(lastRowResult);
       }
       
-      // If last row email matches but no values yet, still return it (Apps Script processing)
+      // PRIORITY 2: If last row email matches (even without values yet), return it
+      // Apps Script may still be processing
       if (lastRowEmail === normalizedSearchEmail) {
-        console.log('Last row email matches but no calculated values yet - Apps Script may still be processing');
+        console.log('✅ Last row email MATCHES - returning last row result (may still be processing)');
         return NextResponse.json(lastRowResult);
       }
     }
 
     // Fallback: Search from bottom to top for email match (in case last row wasn't the right one)
+    console.log('=== SEARCHING BY EMAIL (BOTTOM TO TOP) ===');
     for (let i = rows.length - 1; i >= 1; i--) {
       const row = rows[i];
       const rowEmail = normalize(row[emailIdx] ?? '');
@@ -130,8 +149,8 @@ export async function POST(request: Request) {
           badge: badgeIdx >= 0 ? (row[badgeIdx] ?? '').toString().trim() || null : null,
         };
         
-        console.log('Found matching row at index', i, 'Result:', result);
-        console.log('Raw row values - Score cell:', row[scoreIdx], 'Grade cell:', row[gradeIdx], 'Badge cell:', row[badgeIdx]);
+        console.log('✅ Found matching email at row index', i, 'Result:', result);
+        console.log('Raw row values - Score:', row[scoreIdx], 'Grade:', row[gradeIdx], 'Badge:', row[badgeIdx]);
         return NextResponse.json(result);
       }
     }
