@@ -377,7 +377,33 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
 
   const submitToGoogleForm = async () => {
     if (!googleFormUrl) return;
-    const rom = romPercent ? romPercent.replace(/[^0-9.]/g, "") : "";
+    
+    // Calculate ROM - always send a value, even if calculation fails
+    let rom = "";
+    if (romPercent) {
+      rom = romPercent.replace(/[^0-9.]/g, "");
+    } else {
+      // If ROM calculation failed, try to calculate it manually as fallback
+      const inhaleNum = Number(formData.romInhale);
+      const exhaleNum = Number(formData.romExhale);
+      if (Number.isFinite(inhaleNum) && Number.isFinite(exhaleNum) && exhaleNum > 0) {
+        const calculatedRom = ((inhaleNum - exhaleNum) / exhaleNum) * 1000;
+        if (Number.isFinite(calculatedRom)) {
+          rom = calculatedRom.toFixed(1);
+          console.warn("ROM calculation succeeded on retry:", rom);
+        } else {
+          console.error("ROM calculation failed - invalid result", { inhaleNum, exhaleNum, calculatedRom });
+        }
+      } else {
+        console.error("ROM calculation failed - invalid inputs", { 
+          romInhale: formData.romInhale, 
+          romExhale: formData.romExhale,
+          inhaleNum,
+          exhaleNum 
+        });
+      }
+    }
+    
     const body = new URLSearchParams();
     body.set("fvv", "1");
     body.set("draftResponse", "[]");
@@ -392,15 +418,28 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     body.set(googleEntryIds.mbtScore, formData.mbtSteps);
     body.set(googleEntryIds.lomZone, formData.lomZone);
     body.set(googleEntryIds.goalDetail, formData.goalDetail);
-    if (rom) body.set(googleEntryIds.romScore, rom);
+    
+    // Always send ROM value - use "0" as fallback if calculation completely failed
+    body.set(googleEntryIds.romScore, rom || "0");
+    
+    if (!rom) {
+      console.warn("⚠️ ROM score is missing - sending '0' as fallback. Original values:", {
+        romInhale: formData.romInhale,
+        romExhale: formData.romExhale,
+        romPercent,
+      });
+    }
+    
     try {
       await fetch(googleFormUrl, {
         method: "POST",
         mode: "no-cors",
         body,
       });
+      console.log("✅ Google Form submitted successfully. ROM value sent:", rom || "0");
     } catch (error) {
-      console.error("google form submission error", error);
+      console.error("❌ Google form submission error:", error);
+      throw error; // Re-throw to let handleSubmit catch it
     }
   };
 
@@ -448,6 +487,34 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     };
     const requirements = requiredByStep[step];
     if (!requirements) return true;
+    
+    // For step 6 (ROM), also validate that the values are valid numbers and ROM can be calculated
+    if (step === 6) {
+      const hasValues = requirements.every((key) => formData[key]?.trim().length);
+      if (!hasValues) return false;
+      
+      // Validate ROM calculation
+      const inhaleNum = Number(formData.romInhale);
+      const exhaleNum = Number(formData.romExhale);
+      const isValid = 
+        Number.isFinite(inhaleNum) && 
+        Number.isFinite(exhaleNum) && 
+        exhaleNum > 0 && 
+        romPercent !== null;
+      
+      if (!isValid) {
+        console.warn("ROM validation failed:", {
+          romInhale: formData.romInhale,
+          romExhale: formData.romExhale,
+          inhaleNum,
+          exhaleNum,
+          romPercent,
+        });
+      }
+      
+      return isValid;
+    }
+    
     return requirements.every((key) => formData[key]?.trim().length);
   };
 
@@ -714,6 +781,11 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
         <div className="rounded-2xl bg-[#E9F2F5] p-4 text-sm text-slate-700">
           <p className="font-semibold text-slate-900">Your ROM %</p>
           <p className="text-2xl font-bold text-slate-900">{romPercent ? `${romPercent}%` : "—"}</p>
+          {formData.romInhale && formData.romExhale && !romPercent && (
+            <p className="mt-2 text-xs text-amber-600">
+              ⚠️ Please enter valid numbers. Exhale must be greater than 0.
+            </p>
+          )}
         </div>
       </div>
     </div>
