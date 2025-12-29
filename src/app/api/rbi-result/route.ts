@@ -79,13 +79,28 @@ export async function POST(request: Request) {
     console.log('Total rows:', rows.length);
     console.log('Column indices:', { emailIdx, scoreIdx, gradeIdx, badgeIdx });
     
+    // Log last 5 rows' emails for debugging
+    console.log('=== Last 5 rows emails (for debugging) ===');
+    for (let i = Math.max(1, rows.length - 5); i < rows.length; i++) {
+      const row = rows[i];
+      const rawEmail = row[emailIdx] ?? '';
+      const normalizedRowEmail = normalize(rawEmail);
+      console.log(`Row ${i}: Raw="${rawEmail}", Normalized="${normalizedRowEmail}"`);
+    }
+    
     let mostRecentMatch = null;
     let mostRecentMatchIndex = -1;
     
     // Search from bottom to top (most recent first)
     for (let i = rows.length - 1; i >= 1; i--) {
       const row = rows[i];
-      const rowEmail = normalize(row[emailIdx] ?? '');
+      const rawEmail = row[emailIdx] ?? '';
+      const rowEmail = normalize(rawEmail);
+      
+      // Log first few rows we check
+      if (i >= rows.length - 3) {
+        console.log(`Checking row ${i}: Raw email="${rawEmail}", Normalized="${rowEmail}", Match? ${rowEmail === normalizedSearchEmail}`);
+      }
       
       // Check if email matches
       if (rowEmail === normalizedSearchEmail) {
@@ -134,8 +149,20 @@ export async function POST(request: Request) {
       });
     }
     
-    // No match found
+    // No match found - return debug info with sample emails
     console.log('❌ No email match found in sheet');
+    const lastFewRows = [];
+    for (let i = Math.max(1, rows.length - 5); i < rows.length; i++) {
+      const row = rows[i];
+      const rawEmail = row[emailIdx] ?? '';
+      const normalizedRowEmail = normalize(rawEmail);
+      lastFewRows.push({
+        rowIndex: i,
+        rawEmail,
+        normalizedEmail: normalizedRowEmail,
+      });
+    }
+    
     return NextResponse.json({ 
       score: null, 
       grade: null, 
@@ -145,6 +172,7 @@ export async function POST(request: Request) {
         searchingFor: normalizedSearchEmail,
         totalRows: rows.length,
         columnIndices: { emailIdx, scoreIdx, gradeIdx, badgeIdx },
+        lastFewRowsEmails: lastFewRows,
       }
     });
 
