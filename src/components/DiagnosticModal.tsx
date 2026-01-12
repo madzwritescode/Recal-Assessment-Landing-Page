@@ -879,12 +879,6 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
 );
 
   const renderSummary = () => {
-    const summaryMetrics = [
-      { label: "Score", value: assessmentResult?.score ?? "—" },
-      { label: "Grade", value: assessmentResult?.grade ?? "—" },
-      { label: "Level", value: assessmentResult?.badge ?? "—" },
-    ];
-
     return (
       <div className="space-y-8">
         <SectionTitle title="Your RBI Snapshot" subtitle="Results" />
@@ -895,23 +889,6 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
           <p className="text-sm text-blue-700 mt-2 text-center">
             Check your email for your complete RBI breakdown with personalized insights and targeted breathwork protocols.
           </p>
-        </div>
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0A4367] to-[#144C74] p-6 text-center text-white shadow">
-            <p className="text-xs uppercase tracking-[0.5em] text-white/70">Score</p>
-            <p className="mt-3 text-5xl font-semibold">{summaryMetrics[0].value}</p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {summaryMetrics.slice(1).map((metric) => (
-              <div
-                key={metric.label}
-                className="rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm"
-              >
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{metric.label}</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-900">{metric.value}</p>
-              </div>
-            ))}
-          </div>
         </div>
         <div className="space-y-4 rounded-2xl border border-slate-200 bg-white/70 p-5">
           <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Your Goal</p>
