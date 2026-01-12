@@ -510,7 +510,7 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
 
   const isStepValid = () => {
     const requiredByStep: Record<number, (keyof FormData)[]> = {
-      1: ["firstName", "lastName", "email"],
+      1: ["firstName", "email"],
       2: ["boltScore"],
       3: ["co2ttScore"],
       4: ["mbtSteps"],
@@ -594,20 +594,12 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
         <p className="text-sm font-semibold text-slate-900">
           Please confirm the details below. This is where we will send your personalized feedback on your RBI score.
         </p>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Input
-            name="firstName"
-            value={formData.firstName}
-            placeholder="First Name"
-            onChange={updateForm}
-          />
-          <Input
-            name="lastName"
-            value={formData.lastName}
-            placeholder="Last Name"
-            onChange={updateForm}
-          />
-        </div>
+        <Input
+          name="firstName"
+          value={formData.firstName}
+          placeholder="Name"
+          onChange={updateForm}
+        />
         <Input
           name="email"
           type="email"
