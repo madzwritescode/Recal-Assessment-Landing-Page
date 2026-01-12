@@ -888,27 +888,22 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
 
   const renderSummary = () => {
     const summaryMetrics = [
-      { label: "Score", value: assessmentResult?.score ?? "In progress" },
-      { label: "Grade", value: assessmentResult?.grade ?? "Calibrating" },
-      { label: "Level", value: assessmentResult?.badge ?? "Check inbox soon" },
+      { label: "Score", value: assessmentResult?.score ?? "—" },
+      { label: "Grade", value: assessmentResult?.grade ?? "—" },
+      { label: "Level", value: assessmentResult?.badge ?? "—" },
     ];
 
     return (
       <div className="space-y-8">
         <SectionTitle title="Your RBI Snapshot" subtitle="Results" />
-        <p className="text-base text-slate-700">
-          Your complete RBI breakdown has been sent to your inbox. Here's a quick snapshot of your results:
-        </p>
-        {!assessmentResult && (
-          <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
-            <p className="text-sm text-amber-800 font-medium">
-              Results are still being calculated...
-            </p>
-            <p className="text-xs text-amber-700 mt-1">
-              Your full report will arrive in your inbox within the next minute. Check your spam folder if you don't see it.
-            </p>
-          </div>
-        )}
+        <div className="rounded-xl bg-blue-50 border border-blue-200 p-6">
+          <p className="text-base text-blue-900 font-semibold text-center">
+            Your results have been sent to your inbox.
+          </p>
+          <p className="text-sm text-blue-700 mt-2 text-center">
+            Check your email for your complete RBI breakdown with personalized insights and targeted breathwork protocols.
+          </p>
+        </div>
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0A4367] to-[#144C74] p-6 text-center text-white shadow">
             <p className="text-xs uppercase tracking-[0.5em] text-white/70">Score</p>

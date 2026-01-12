@@ -311,8 +311,7 @@ const partnerLogos = [
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    name: '',
     email: ''
   });
   const [modalLead, setModalLead] = useState<{
@@ -434,8 +433,8 @@ export default function Home() {
     });
 
     setModalLead({
-      firstName: formData.firstName,
-      lastName: formData.lastName,
+      firstName: formData.name,
+      lastName: '',
       email: formData.email,
     });
 
@@ -491,28 +490,16 @@ export default function Home() {
               {/* Hero Form Container */}
               <div className="bg-white rounded-xl border-2 p-3 shadow-lg" style={{ borderColor: '#4A90A4' }}>
                 <form onSubmit={handleFormSubmit} className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      name="firstName"
-                      placeholder="First Name"
-                      value={formData.firstName}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500 text-gray-900"
-                      style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '43px', color: '#0A4367' }}
-                      required
-                    />
-                    <input
-                      type="text"
-                      name="lastName"
-                      placeholder="Last Name"
-                      value={formData.lastName}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500 text-gray-900"
-                      style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '43px', color: '#0A4367' }}
-                      required
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="Name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500 text-gray-900"
+                    style={{ borderColor: '#0A4367', fontFamily: 'Rogue Sans Ext, sans-serif', fontStyle: 'italic', fontSize: '16px', height: '43px', color: '#0A4367' }}
+                    required
+                  />
                   <input
                     type="email"
                     name="email"
@@ -536,7 +523,7 @@ export default function Home() {
                     Takes 5-10 minutes on average to complete
                   </p>
                   <p className="text-center text-[16px] lg:text-sm italic" style={{ color: '#0A4367', fontFamily: 'Roboto, sans-serif', fontWeight: '500', fontStyle: 'italic' }}>
-                    Your info will never be shared with anyone. No credit card required.
+                    Your info will never be shared with anyone.
                   </p>
                 </form>
               </div>
