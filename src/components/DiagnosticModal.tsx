@@ -556,9 +556,13 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       
       // Redirect to results page after successful submission
       // Use NEXT_PUBLIC_ prefix for client-side access in Next.js
-      const resultsUrl = 
+      const baseResultsUrl = 
         process.env.NEXT_PUBLIC_GHL_RESULTS_URL || 
         "https://results.assessment.recal.training";
+      
+      // Include email as query parameter so results page can identify the user
+      const emailParam = encodeURIComponent(emailForLookup);
+      const resultsUrl = `${baseResultsUrl}?email=${emailParam}`;
       
       // Small delay to ensure loading state is visible before redirect
       setTimeout(() => {
