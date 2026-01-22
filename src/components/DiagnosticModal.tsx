@@ -442,12 +442,12 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
         } catch {
           errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
         }
-        console.error("GoHighLevel submission error:", {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData,
-        });
-        throw new Error(errorData.error || `Failed to submit to GoHighLevel (${response.status})`);
+        // Log full error details in a way that's visible
+        console.error("❌ GoHighLevel submission failed:");
+        console.error("Status:", response.status, response.statusText);
+        console.error("Error response:", errorText);
+        console.error("Parsed error data:", JSON.stringify(errorData, null, 2));
+        throw new Error(errorData.error || errorData.details || `Failed to submit to GoHighLevel (${response.status})`);
       }
 
       const result = await response.json();

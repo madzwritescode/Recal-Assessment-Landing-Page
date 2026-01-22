@@ -122,8 +122,9 @@ export async function POST(request: Request) {
     }
 
     // GoHighLevel Contacts API endpoint
+    // If Location-Id is provided, use location-specific endpoint, otherwise use account-level
     const ghlBaseUrl = 'https://services.leadconnectorhq.com';
-    const endpoint = `${ghlBaseUrl}/contacts/`;
+    let endpoint = `${ghlBaseUrl}/contacts/`;
 
     // Prepare headers
     const headers: Record<string, string> = {
@@ -132,10 +133,13 @@ export async function POST(request: Request) {
       'Content-Type': 'application/json',
     };
 
-    // Add Location-Id header if provided
+    // Add Location-Id header if provided (required for location-specific tokens)
     if (ghlLocationId) {
       headers['Location-Id'] = ghlLocationId;
+      // Location-specific endpoint
+      endpoint = `${ghlBaseUrl}/contacts/`;
     }
+    // If no Location-Id, use account-level endpoint (token must have account-level access)
 
     // Make request to GoHighLevel API
     const ghlResponse = await fetch(endpoint, {
@@ -147,16 +151,24 @@ export async function POST(request: Request) {
     const ghlResponseData = await ghlResponse.json().catch(() => ({}));
 
     if (!ghlResponse.ok) {
+      const errorMessage = ghlResponseData.message || ghlResponseData.error || 'Unknown error';
       console.error('GoHighLevel API error:', {
         status: ghlResponse.status,
         statusText: ghlResponse.statusText,
         response: ghlResponseData,
+        errorMessage,
       });
+
+      // Provide helpful error message for location access issues
+      let userFriendlyError = errorMessage;
+      if (ghlResponse.status === 403 && errorMessage.toLowerCase().includes('location')) {
+        userFriendlyError = 'Token does not have access to this location. Please set GHL_LOCATION_ID environment variable or use an account-level token.';
+      }
 
       const response = NextResponse.json(
         {
           error: 'Failed to submit to GoHighLevel',
-          details: ghlResponseData.message || ghlResponseData.error || 'Unknown error',
+          details: userFriendlyError,
         },
         { status: ghlResponse.status || 500 }
       );

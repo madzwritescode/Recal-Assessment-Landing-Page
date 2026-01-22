@@ -88,8 +88,12 @@ export async function POST(request: Request) {
       console.log(`Row ${i}: Raw="${rawEmail}", Normalized="${normalizedRowEmail}"`);
     }
     
+    // Find the MOST RECENT row with matching email (search bottom to top)
+    // We want the absolute most recent submission, even if it doesn't have calculated values yet
     let mostRecentMatch = null;
     let mostRecentMatchIndex = -1;
+    let mostRecentWithValues = null;
+    let mostRecentWithValuesIndex = -1;
     
     // Search from bottom to top (most recent first)
     for (let i = rows.length - 1; i >= 1; i--) {
@@ -119,23 +123,31 @@ export async function POST(request: Request) {
         console.log(`Row ${i}: Email match found. Has calculated values:`, hasCalculatedValues);
         console.log(`Row ${i}: Raw values:`, { score: rawScore, grade: rawGrade, badge: rawBadge });
         
-        // Store the first match (most recent since we go bottom to top)
+        // Store the FIRST match we find (most recent since we go bottom to top)
         if (mostRecentMatch === null) {
           mostRecentMatch = result;
           mostRecentMatchIndex = i;
-          
-          // If this match has calculated values, return it immediately
-          if (hasCalculatedValues) {
-            console.log(`✅ Found match at row ${i} with calculated values. Returning:`, result);
-            return NextResponse.json(result);
-          }
+        }
+        
+        // Also track the most recent match WITH calculated values
+        if (hasCalculatedValues && mostRecentWithValues === null) {
+          mostRecentWithValues = result;
+          mostRecentWithValuesIndex = i;
+          console.log(`✅ Found most recent match with calculated values at row ${i}:`, result);
         }
       }
     }
     
+    // Return the most recent match WITH calculated values if available
+    // Otherwise return the most recent match (even without values) so we know it exists
+    if (mostRecentWithValues !== null) {
+      console.log(`✅ Returning most recent match with values from row ${mostRecentWithValuesIndex}`);
+      return NextResponse.json(mostRecentWithValues);
+    }
+    
     // If we found a match but no calculated values yet, return null (still processing)
     if (mostRecentMatch !== null) {
-      console.log(`⏳ Found match at row ${mostRecentMatchIndex} but no calculated values yet (Apps Script still processing)`);
+      console.log(`⏳ Found most recent match at row ${mostRecentMatchIndex} but no calculated values yet (Apps Script still processing)`);
       return NextResponse.json({ 
         score: null, 
         grade: null, 
