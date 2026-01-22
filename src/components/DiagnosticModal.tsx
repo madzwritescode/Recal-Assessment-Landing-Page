@@ -435,9 +435,19 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("GoHighLevel submission error:", errorData);
-        throw new Error(errorData.error || "Failed to submit to GoHighLevel");
+        const errorText = await response.text().catch(() => "");
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
+        }
+        console.error("GoHighLevel submission error:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+        });
+        throw new Error(errorData.error || `Failed to submit to GoHighLevel (${response.status})`);
       }
 
       const result = await response.json();

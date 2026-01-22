@@ -18,9 +18,13 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: Request) {
+  // Log that the route was hit
+  console.log('=== /api/submitRBI route called ===');
+  
   try {
     // Get environment variables
     const ghlApiToken = process.env.GHL_API_TOKEN;
+    console.log('GHL_API_TOKEN exists:', !!ghlApiToken);
     const ghlApiVersion = process.env.GHL_API_VERSION || '2021-07-28';
     const ghlLocationId = process.env.GHL_LOCATION_ID; // Optional: if you have a specific location ID
 
