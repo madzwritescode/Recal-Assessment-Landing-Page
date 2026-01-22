@@ -403,6 +403,52 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     }
   };
 
+  const submitToGoHighLevel = async (assessmentResult: AssessmentResult | null) => {
+    try {
+      // Prepare ROM percentage (remove % if present)
+      const romPercentage = romPercent ? romPercent.replace(/[^0-9.]/g, "") : null;
+      
+      // Combine goalType and goalDetail for primary_goal
+      const primaryGoal = formData.goalDetail 
+        ? `${formData.goalType} - ${formData.goalDetail}`.trim()
+        : formData.goalType || "";
+
+      const payload = {
+        firstName: formData.firstName.trim(),
+        email: formData.email.trim().toLowerCase(),
+        boltScore: formData.boltScore || null,
+        co2ToleranceScore: formData.co2ttScore || null,
+        mbtScore: formData.mbtSteps || null,
+        lomZones: formData.lomZone || null,
+        romPercentage: romPercentage || null,
+        rbiTotalScore: assessmentResult?.score || null,
+        rbiGrade: assessmentResult?.grade || null,
+        rbiBadge: assessmentResult?.badge || null,
+        primaryGoal: primaryGoal || null,
+        rbiTimestamp: new Date().toISOString(),
+      };
+
+      const response = await fetch("/api/submitRBI", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("GoHighLevel submission error:", errorData);
+        throw new Error(errorData.error || "Failed to submit to GoHighLevel");
+      }
+
+      const result = await response.json();
+      console.log("✅ Successfully submitted to GoHighLevel:", result);
+      return result;
+    } catch (error) {
+      console.error("submitToGoHighLevel error", error);
+      throw error;
+    }
+  };
+
   const submitToGoogleForm = async () => {
     if (!googleFormUrl) return;
     
@@ -498,12 +544,34 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       if (result) {
         setAssessmentResult(result);
       }
+      
+      // Submit to GoHighLevel with assessment results
+      try {
+        await submitToGoHighLevel(result);
+        console.log("✅ Successfully submitted to GoHighLevel");
+      } catch (ghlError) {
+        // Log but don't fail the entire submission if GHL fails
+        console.warn("GoHighLevel submission failed, but continuing:", ghlError);
+      }
+      
+      // Redirect to results page after successful submission
+      // Use NEXT_PUBLIC_ prefix for client-side access in Next.js
+      const resultsUrl = 
+        process.env.NEXT_PUBLIC_GHL_RESULTS_URL || 
+        "https://results.assessment.recal.training";
+      
+      // Small delay to ensure loading state is visible before redirect
+      setTimeout(() => {
+        window.location.href = resultsUrl;
+      }, 500);
+      
+      // Note: The code below won't execute due to redirect, but kept for fallback
       setSubmissionState("success");
       setStep(modalSteps);
     } catch (error) {
       console.error("Diagnostic submission error", error);
       setSubmissionState("error");
-      setErrorMessage("We couldn’t submit your results. Please try again.");
+      setErrorMessage("We couldn't submit your results. Please try again.");
       setStep(7);
     }
   };
