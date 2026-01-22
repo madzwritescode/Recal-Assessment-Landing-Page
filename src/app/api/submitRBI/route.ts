@@ -101,7 +101,13 @@ export async function POST(request: Request) {
       customFields['rbi_badge'] = String(rbiBadge);
     }
 
-    const ghlPayload: any = {
+    interface GHLContactPayload {
+      firstName: string;
+      email: string;
+      customFields?: Record<string, string>;
+    }
+
+    const ghlPayload: GHLContactPayload = {
       firstName: firstName.trim(),
       email: email.trim().toLowerCase(),
     };
