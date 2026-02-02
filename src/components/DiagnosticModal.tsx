@@ -403,62 +403,6 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     }
   };
 
-  const submitToGoHighLevel = async (assessmentResult: AssessmentResult | null) => {
-    try {
-      // Prepare ROM percentage (remove % if present)
-      const romPercentage = romPercent ? romPercent.replace(/[^0-9.]/g, "") : null;
-      
-      // Combine goalType and goalDetail for primary_goal
-      const primaryGoal = formData.goalDetail 
-        ? `${formData.goalType} - ${formData.goalDetail}`.trim()
-        : formData.goalType || "";
-
-      const payload = {
-        firstName: formData.firstName.trim(),
-        email: formData.email.trim().toLowerCase(),
-        boltScore: formData.boltScore || null,
-        co2ToleranceScore: formData.co2ttScore || null,
-        mbtScore: formData.mbtSteps || null,
-        lomZones: formData.lomZone || null,
-        romPercentage: romPercentage || null,
-        rbiTotalScore: assessmentResult?.score || null,
-        rbiGrade: assessmentResult?.grade || null,
-        rbiBadge: assessmentResult?.badge || null,
-        primaryGoal: primaryGoal || null,
-        rbiTimestamp: new Date().toISOString(),
-      };
-
-      const response = await fetch("/api/submitRBI", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
-        }
-        // Log full error details in a way that's visible
-        console.error("❌ GoHighLevel submission failed:");
-        console.error("Status:", response.status, response.statusText);
-        console.error("Error response:", errorText);
-        console.error("Parsed error data:", JSON.stringify(errorData, null, 2));
-        throw new Error(errorData.error || errorData.details || `Failed to submit to GoHighLevel (${response.status})`);
-      }
-
-      const result = await response.json();
-      console.log("✅ Successfully submitted to GoHighLevel:", result);
-      return result;
-    } catch (error) {
-      console.error("submitToGoHighLevel error", error);
-      throw error;
-    }
-  };
-
   const submitToGoogleForm = async () => {
     if (!googleFormUrl) return;
     
@@ -545,43 +489,19 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
             })
           : Promise.resolve(),
       ]);
-      // Use the exact same email format that was sent to Google Form
+
       const emailForLookup = formData.email.trim();
-      console.log("=== SUBMITTING ASSESSMENT ===");
-      console.log("Email sent to Google Form:", emailForLookup);
-      console.log("Email will be used for result lookup:", emailForLookup);
-      const result = await fetchAssessmentResultWithRetries(emailForLookup);
-      if (result) {
-        setAssessmentResult(result);
-      }
-      
-      // Submit to GoHighLevel with assessment results
-      try {
-        await submitToGoHighLevel(result);
-        console.log("✅ Successfully submitted to GoHighLevel");
-      } catch (ghlError) {
-        // Log but don't fail the entire submission if GHL fails
-        console.warn("GoHighLevel submission failed, but continuing:", ghlError);
-      }
-      
-      // Redirect to results page after successful submission
-      // Use NEXT_PUBLIC_ prefix for client-side access in Next.js
-      const baseResultsUrl = 
-        process.env.NEXT_PUBLIC_GHL_RESULTS_URL || 
-        "https://results.assessment.recal.training";
-      
-      // Include email as query parameter so results page can identify the user
+      const baseResultsUrl =
+        process.env.NEXT_PUBLIC_GHL_RESULTS_URL ||
+        "https://results.recal.training/";
       const emailParam = encodeURIComponent(emailForLookup);
       const resultsUrl = `${baseResultsUrl}?email=${emailParam}`;
-      
-      // Small delay to ensure loading state is visible before redirect
+
+      // Show "Calculating your results…" spinner for 5–7 seconds, then redirect (unconditional)
+      const redirectDelayMs = 6000;
       setTimeout(() => {
         window.location.href = resultsUrl;
-      }, 500);
-      
-      // Note: The code below won't execute due to redirect, but kept for fallback
-      setSubmissionState("success");
-      setStep(modalSteps);
+      }, redirectDelayMs);
     } catch (error) {
       console.error("Diagnostic submission error", error);
       setSubmissionState("error");
@@ -942,7 +862,7 @@ const renderGoalStep = (
   </div>
 );
 
-const renderLoadingStep = (loadingMessageIndex: number) => (
+const renderLoadingStep = (loadingMessageIndex: number, isPostSubmit?: boolean) => (
   <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center">
     <div className="h-20 w-20 rounded-full border-4 border-[#0A4367]/30 border-t-[#0A4367] animate-spin" />
     <div className="space-y-2">
@@ -950,11 +870,13 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
         className="text-2xl font-semibold"
         style={{ color: brandNavy, fontFamily: "Rogue Sans Ext, sans-serif", fontStyle: "italic" }}
       >
-        Calibrating your RBI
+        {isPostSubmit ? "Calculating your results…" : "Calibrating your RBI"}
       </p>
-      <p className="text-sm text-slate-600">{loadingMessages[loadingMessageIndex]}</p>
+      <p className="text-sm text-slate-600">
+        {isPostSubmit ? "Redirecting you to your results shortly." : loadingMessages[loadingMessageIndex]}
+      </p>
       <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-        This takes about 3–5 seconds
+        {isPostSubmit ? "This takes about 5–7 seconds" : "This takes about 3–5 seconds"}
       </p>
     </div>
   </div>
@@ -1025,14 +947,14 @@ const renderLoadingStep = (loadingMessageIndex: number) => (
       case 7:
         return renderGoalStep(formData, updateForm);
       case 8:
-        return renderLoadingStep(loadingMessageIndex);
+        return renderLoadingStep(loadingMessageIndex, submissionState === "submitting");
       case 9:
         return renderSummary();
       default:
         return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, formData, romPercent, loadingMessageIndex, assessmentResult]);
+  }, [step, formData, romPercent, loadingMessageIndex, assessmentResult, submissionState]);
 
   const isLoadingStep = step === modalSteps - 1;
   const isFinalStep = step === modalSteps;
