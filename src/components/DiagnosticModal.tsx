@@ -491,11 +491,20 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       ]);
 
       const emailForLookup = formData.email.trim();
+      const result = await fetchAssessmentResultWithRetries(emailForLookup);
+      if (result) {
+        setAssessmentResult(result);
+      }
+
       const baseResultsUrl =
         process.env.NEXT_PUBLIC_GHL_RESULTS_URL ||
         "https://results.recal.training/";
-      const emailParam = encodeURIComponent(emailForLookup);
-      const resultsUrl = `${baseResultsUrl}?email=${emailParam}`;
+      const url = new URL(baseResultsUrl);
+      url.searchParams.set("email", emailForLookup);
+      if (result?.score != null) url.searchParams.set("score", String(result.score));
+      if (result?.grade != null) url.searchParams.set("grade", result.grade);
+      if (result?.badge != null) url.searchParams.set("badge", result.badge);
+      const resultsUrl = url.toString();
 
       // Show "Calculating your results…" spinner for 5–7 seconds, then redirect (unconditional)
       const redirectDelayMs = 6000;
