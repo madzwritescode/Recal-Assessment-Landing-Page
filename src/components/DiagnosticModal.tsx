@@ -90,6 +90,83 @@ const computeRomPercent = (inhale: string, exhale: string) => {
   return rom.toFixed(1);
 };
 
+// --- Helper Functions for Scoring (mirrors Google Apps Script) ---
+const getBoltTier = (score: number) => {
+  if (score < 15) return 0;
+  if (score <= 19) return 1;
+  if (score <= 24) return 2;
+  if (score <= 29) return 3;
+  if (score <= 34) return 4;
+  return 5;
+};
+
+const getCo2ttTier = (score: number) => {
+  if (score < 25) return 0;
+  if (score <= 39) return 1;
+  if (score <= 54) return 2;
+  if (score <= 69) return 3;
+  if (score <= 84) return 4;
+  return 5;
+};
+
+const getMbtTier = (score: number) => getCo2ttTier(score);
+
+const getRomTier = (percentage: number) => {
+  if (percentage < 60) return 0;
+  if (percentage <= 74) return 1;
+  if (percentage <= 89) return 2;
+  if (percentage <= 104) return 3;
+  if (percentage <= 119) return 4;
+  return 5;
+};
+
+const getLomTier = (zone: string) => {
+  const l = zone.toLowerCase().trim();
+  if (l.includes("zone 3 only")) return 0;
+  if (l.includes("zone 3") && l.includes("zone 2")) return 1;
+  if (l.includes("zone 2") && !l.includes("zone 3") && !l.includes("zone 1")) return 2;
+  if (l.includes("zone 1") && l.includes("zone 2")) return 3;
+  if (l.includes("zone 1") && l.includes("horizontal")) return 4;
+  if (l.includes("zone 1") && l.includes("360")) return 5;
+  return 0;
+};
+
+const calculateRBI = (bolt: number, co2: number, mbt: number, lom: string, rom: number) => {
+  const boltScore = getBoltTier(bolt) * 1;
+  const co2Score = getCo2ttTier(co2) * 2;
+  const mbtScore = getMbtTier(mbt) * 3;
+  const lomScore = getLomTier(lom) * 3;
+  const romScore = getRomTier(rom) * 1;
+
+  const totalPoints = boltScore + co2Score + mbtScore + lomScore + romScore;
+  const maxPoints = 5 * 1 + 5 * 2 + 5 * 3 + 5 * 3 + 5 * 1; // 50
+  const finalScore = Math.round((totalPoints / maxPoints) * 100);
+
+  let grade = "N/A";
+  let badge = "N/A";
+  if (finalScore >= 93) {
+    grade = "Ultra";
+    badge = "Breath Master";
+  } else if (finalScore >= 80) {
+    grade = "Great";
+    badge = "Breathwork-Trained";
+  } else if (finalScore >= 65) {
+    grade = "Good";
+    badge = "Functional Breather";
+  } else if (finalScore >= 50) {
+    grade = "Fair";
+    badge = "Breather-in-Training";
+  } else if (finalScore >= 31) {
+    grade = "Poor";
+    badge = "Breath Beginner";
+  } else {
+    grade = "Very Poor";
+    badge = "Breath-Aware";
+  }
+
+  return { score: finalScore, grade, badge };
+};
+
 const motionVariants = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
@@ -298,95 +375,6 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     };
   };
 
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  // Fetch result by searching all rows for matching email
-  // Retry up to 10 times over 30 seconds to allow Apps Script time to calculate
-  const fetchAssessmentResultWithRetries = async (email: string) => {
-    if (!email) return null;
-    
-    const normalizedEmail = email.trim().toLowerCase();
-    const maxAttempts = 10;
-    const delays = [2000, 2000, 3000, 3000, 4000, 4000, 5000, 5000, 5000]; // ~30 seconds total
-    
-    console.log("=== FETCHING ASSESSMENT RESULT ===");
-    console.log("Email:", normalizedEmail);
-    console.log("Will retry up to 10 times over 30 seconds");
-    
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      // Wait before each attempt except the first one
-      if (attempt > 0) {
-        await sleep(delays[attempt - 1]);
-      }
-      
-      try {
-        const response = await fetch("/api/rbi-result", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: normalizedEmail }),
-        });
-        
-        if (!response.ok) {
-          console.warn(`Attempt ${attempt + 1}: API error`, response.status);
-          continue;
-        }
-        
-        const payload = await response.json().catch(() => ({}));
-        
-        console.log(`Attempt ${attempt + 1} - Full API response:`, JSON.stringify(payload, null, 2));
-        
-        // Log debug info if available
-        if (payload?.debug) {
-          console.log(`Attempt ${attempt + 1} - DEBUG INFO from API:`, payload.debug);
-        }
-        
-        // Check for API errors
-        if (payload?.error) {
-          console.warn(`Attempt ${attempt + 1}: API error:`, payload.error);
-          continue;
-        }
-        
-        // Check if we have calculated values
-        const hasResult = payload?.score || payload?.grade || payload?.badge;
-        
-        console.log(`Attempt ${attempt + 1} - Values check:`, {
-          score: payload?.score,
-          grade: payload?.grade,
-          badge: payload?.badge,
-          scoreTruthy: !!payload?.score,
-          gradeTruthy: !!payload?.grade,
-          badgeTruthy: !!payload?.badge,
-          hasResult,
-        });
-        
-        if (hasResult) {
-          const result = {
-            score: payload.score ?? null,
-            grade: payload.grade ?? null,
-            badge: payload.badge ?? null,
-          } as AssessmentResult;
-          console.log(`✅ Successfully fetched result on attempt ${attempt + 1}:`, result);
-          return result;
-        } else {
-          console.log(`Attempt ${attempt + 1}: Last row doesn't have calculated values yet (still processing)`);
-          if (payload?.debug) {
-            console.log(`Attempt ${attempt + 1}: Debug - Email match:`, payload.debug.emailMatch);
-            if (!payload.debug.emailMatch) {
-              console.log(`⚠️ Email mismatch! Last row email: "${payload.debug.lastRowEmail}", Searching for: "${payload.debug.searchingFor}"`);
-            } else {
-              console.log(`⚠️ Email matches but calculated columns (M, N, O) are empty. Apps Script may still be processing.`);
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`Attempt ${attempt + 1}: Fetch error:`, error);
-      }
-    }
-    
-    console.warn("No results found after", maxAttempts, "attempts - Apps Script may still be processing");
-    return null;
-  };
-
   const recordLandingSignup = async () => {
     try {
       await fetch("/api/record-landing-signup", {
@@ -405,33 +393,20 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
 
   const submitToGoogleForm = async () => {
     if (!googleFormUrl) return;
-    
-    // Calculate ROM - always send a value, even if calculation fails
+
     let rom = "";
     if (romPercent) {
       rom = romPercent.replace(/[^0-9.]/g, "");
     } else {
-      // If ROM calculation failed, try to calculate it manually as fallback
       const inhaleNum = Number(formData.romInhale);
       const exhaleNum = Number(formData.romExhale);
       if (Number.isFinite(inhaleNum) && Number.isFinite(exhaleNum) && exhaleNum > 0) {
         const calculatedRom = ((inhaleNum - exhaleNum) / exhaleNum) * 1000;
         if (Number.isFinite(calculatedRom)) {
           rom = calculatedRom.toFixed(1);
-          console.warn("ROM calculation succeeded on retry:", rom);
-        } else {
-          console.error("ROM calculation failed - invalid result", { inhaleNum, exhaleNum, calculatedRom });
         }
-      } else {
-        console.error("ROM calculation failed - invalid inputs", { 
-          romInhale: formData.romInhale, 
-          romExhale: formData.romExhale,
-          inhaleNum,
-          exhaleNum 
-        });
       }
     }
-    
     const body = new URLSearchParams();
     body.set("fvv", "1");
     body.set("draftResponse", "[]");
@@ -446,18 +421,7 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     body.set(googleEntryIds.mbtScore, formData.mbtSteps);
     body.set(googleEntryIds.lomZone, formData.lomZone);
     body.set(googleEntryIds.goalDetail, formData.goalDetail);
-    
-    // Always send ROM value - use "0" as fallback if calculation completely failed
     body.set(googleEntryIds.romScore, rom || "0");
-    
-    if (!rom) {
-      console.warn("⚠️ ROM score is missing - sending '0' as fallback. Original values:", {
-        romInhale: formData.romInhale,
-        romExhale: formData.romExhale,
-        romPercent,
-      });
-    }
-    
     try {
       await fetch(googleFormUrl, {
         method: "POST",
@@ -467,7 +431,7 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       console.log("✅ Google Form submitted successfully. ROM value sent:", rom || "0");
     } catch (error) {
       console.error("❌ Google form submission error:", error);
-      throw error; // Re-throw to let handleSubmit catch it
+      throw error;
     }
   };
 
@@ -491,19 +455,34 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       ]);
 
       const emailForLookup = formData.email.trim();
-      const result = await fetchAssessmentResultWithRetries(emailForLookup);
-      if (result) {
-        setAssessmentResult(result);
-      }
+      const firstName = formData.firstName.trim();
+      const goal = formData.goalDetail
+        ? `${formData.goalType} - ${formData.goalDetail}`.trim()
+        : formData.goalType.trim();
+
+      const bolt = Number(formData.boltScore) || 0;
+      const co2 = Number(formData.co2ttScore) || 0;
+      const mbt = Number(formData.mbtSteps) || 0;
+      const lom = formData.lomZone.trim();
+      const rom = romPercent != null ? parseFloat(romPercent) : 0;
+
+      const result = calculateRBI(bolt, co2, mbt, lom, rom);
+      setAssessmentResult({
+        score: String(result.score),
+        grade: result.grade,
+        badge: result.badge,
+      });
 
       const baseResultsUrl =
         process.env.NEXT_PUBLIC_GHL_RESULTS_URL ||
         "https://results.recal.training/";
       const url = new URL(baseResultsUrl);
       url.searchParams.set("email", emailForLookup);
-      if (result?.score != null) url.searchParams.set("score", String(result.score));
-      if (result?.grade != null) url.searchParams.set("grade", result.grade);
-      if (result?.badge != null) url.searchParams.set("badge", result.badge);
+      url.searchParams.set("name", firstName);
+      url.searchParams.set("goal", goal);
+      url.searchParams.set("score", String(result.score));
+      url.searchParams.set("grade", result.grade);
+      url.searchParams.set("badge", result.badge);
       const resultsUrl = url.toString();
 
       // Show "Calculating your results…" spinner for 5–7 seconds, then redirect (unconditional)
