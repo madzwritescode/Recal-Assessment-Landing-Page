@@ -45,11 +45,11 @@ export default function MaintenanceView() {
         <p className="text-sm text-slate-400">
           In the meantime, you can reach out at{" "}
           <a
-            href="mailto:hello@recal.training"
+            href="mailto:anthony@recaltraining.com"
             className="font-medium transition hover:text-[#0A4367]"
             style={{ color: brandTeal }}
           >
-            hello@recal.training
+            anthony@recaltraining.com
           </a>
         </p>
       </div>
