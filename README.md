@@ -14,7 +14,14 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3001](http://localhost:3001) (or [http://127.0.0.1:3001](http://127.0.0.1:3001)) in your browser to see the result. (This project uses port **3001** so it doesn’t conflict with other apps on 3000.)
+
+### Local preview (step-by-step)
+
+1. Open a terminal (macOS Terminal, iTerm, or Cursor’s integrated terminal).
+2. Go to the project folder: `cd /Users/madz/Documents/GitHub/Recal-Assessment-Landing-Page`
+3. Start the dev server: `npm run dev`
+4. When you see “Ready” or “Local: http://127.0.0.1:3001”, open that URL in your browser (Chrome, Safari, etc.).
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

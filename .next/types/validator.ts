@@ -65,6 +65,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/api/debug-form-ids/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/debug-form-ids">> = Specific
+  const handler = {} as typeof import("../../src/app/api/debug-form-ids/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/api/latest-signups/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/latest-signups">> = Specific
@@ -87,6 +96,24 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/record-landing-signup">> = Specific
   const handler = {} as typeof import("../../src/app/api/record-landing-signup/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/submit-diagnostic-form/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/submit-diagnostic-form">> = Specific
+  const handler = {} as typeof import("../../src/app/api/submit-diagnostic-form/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/submitRBI/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/submitRBI">> = Specific
+  const handler = {} as typeof import("../../src/app/api/submitRBI/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

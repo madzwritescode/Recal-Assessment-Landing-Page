@@ -15,6 +15,16 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/latest-signups/route.js"
+    ],
+    "/api/record-landing-signup/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/record-landing-signup/route.js"
+    ],
+    "/api/submit-diagnostic-form/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/submit-diagnostic-form/route.js"
     ]
   }
 }

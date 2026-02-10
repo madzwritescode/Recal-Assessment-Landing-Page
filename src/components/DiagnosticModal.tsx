@@ -18,12 +18,13 @@ type FormData = {
   firstName: string;
   lastName: string;
   email: string;
+  age: string;
+  gender: string;
   boltScore: string;
   co2ttScore: string;
   mbtSteps: string;
   lomZone: string;
-  romInhale: string;
-  romExhale: string;
+  balloon: string;
   goalType: string;
   goalDetail: string;
 };
@@ -52,6 +53,9 @@ const googleEntryIds = {
   mbtScore: "entry.1392028128",
   lomZone: "entry.1358412920",
   romScore: "entry.1128018511",
+  balloonScore: "entry.1115436622",
+  age: "entry.1446995001",
+  gender: "entry.2121457013",
   goalDetail: "entry.887435060",
 };
 
@@ -66,12 +70,13 @@ const initialForm: FormData = {
   firstName: "",
   lastName: "",
   email: "",
+  age: "",
+  gender: "",
   boltScore: "",
   co2ttScore: "",
   mbtSteps: "",
   lomZone: "",
-  romInhale: "",
-  romExhale: "",
+  balloon: "",
   goalType: "",
   goalDetail: "",
 };
@@ -79,46 +84,26 @@ const initialForm: FormData = {
 const youtubeParams =
   "?autoplay=0&mute=0&rel=0&modestbranding=1&playsinline=1&color=white";
 
-const computeRomPercent = (inhale: string, exhale: string) => {
-  const inhaleNum = Number(inhale);
-  const exhaleNum = Number(exhale);
-  if (!Number.isFinite(inhaleNum) || !Number.isFinite(exhaleNum) || exhaleNum <= 0) {
-    return null;
-  }
-  const rom = ((inhaleNum - exhaleNum) / exhaleNum) * 1000;
-  if (!Number.isFinite(rom)) return null;
-  return rom.toFixed(1);
-};
-
-// --- Helper Functions for Scoring (mirrors Google Apps Script) ---
+// --- Helper Functions for Scoring (RBI V2) ---
 const getBoltTier = (score: number) => {
   if (score < 15) return 0;
-  if (score <= 19) return 1;
-  if (score <= 24) return 2;
-  if (score <= 29) return 3;
-  if (score <= 34) return 4;
+  if (score < 20) return 1;
+  if (score < 25) return 2;
+  if (score < 30) return 3;
+  if (score < 35) return 4;
   return 5;
 };
 
 const getCo2ttTier = (score: number) => {
   if (score < 25) return 0;
-  if (score <= 39) return 1;
-  if (score <= 54) return 2;
-  if (score <= 69) return 3;
-  if (score <= 84) return 4;
+  if (score < 40) return 1;
+  if (score < 55) return 2;
+  if (score < 70) return 3;
+  if (score < 85) return 4;
   return 5;
 };
 
 const getMbtTier = (score: number) => getCo2ttTier(score);
-
-const getRomTier = (percentage: number) => {
-  if (percentage < 60) return 0;
-  if (percentage <= 74) return 1;
-  if (percentage <= 89) return 2;
-  if (percentage <= 104) return 3;
-  if (percentage <= 119) return 4;
-  return 5;
-};
 
 const getLomTier = (zone: string) => {
   const l = zone.toLowerCase().trim();
@@ -131,37 +116,56 @@ const getLomTier = (zone: string) => {
   return 0;
 };
 
-const calculateRBI = (bolt: number, co2: number, mbt: number, lom: string, rom: number) => {
+// 1BT: count of balloons in 1 min. Tiers: <7(0), <11(1), <14(2), <17(3), <19(4), 19+(5)
+const get1BTTier = (count: number) => {
+  if (count < 7) return 0;
+  if (count < 11) return 1;
+  if (count < 14) return 2;
+  if (count < 17) return 3;
+  if (count < 19) return 4;
+  return 5;
+};
+
+const calculateRBI = (
+  bolt: number,
+  co2: number,
+  mbt: number,
+  lom: string,
+  balloonCount: number,
+  age: number
+) => {
   const boltScore = getBoltTier(bolt) * 1;
   const co2Score = getCo2ttTier(co2) * 2;
   const mbtScore = getMbtTier(mbt) * 3;
-  const lomScore = getLomTier(lom) * 3;
-  const romScore = getRomTier(rom) * 1;
+  const lomScore = getLomTier(lom) * 2;
+  let oneBTTier = get1BTTier(balloonCount);
+  if (age > 65) oneBTTier = Math.min(5, oneBTTier + 1);
+  const oneBTScore = oneBTTier * 2;
 
-  const totalPoints = boltScore + co2Score + mbtScore + lomScore + romScore;
-  const maxPoints = 5 * 1 + 5 * 2 + 5 * 3 + 5 * 3 + 5 * 1; // 50
+  const totalPoints = boltScore + co2Score + mbtScore + lomScore + oneBTScore;
+  const maxPoints = 5 * 1 + 5 * 2 + 5 * 3 + 5 * 2 + 5 * 2; // 50
   const finalScore = Math.round((totalPoints / maxPoints) * 100);
 
   let grade = "N/A";
   let badge = "N/A";
   if (finalScore >= 93) {
     grade = "Ultra";
-    badge = "Breath Master";
+    badge = "Everest-Ready";
   } else if (finalScore >= 80) {
     grade = "Great";
-    badge = "Breathwork-Trained";
+    badge = "Summit-Ready";
   } else if (finalScore >= 65) {
     grade = "Good";
-    badge = "Functional Breather";
+    badge = "Summit-Approaching";
   } else if (finalScore >= 50) {
     grade = "Fair";
-    badge = "Breather-in-Training";
+    badge = "Acclimatizing";
   } else if (finalScore >= 31) {
     grade = "Poor";
-    badge = "Breath Beginner";
+    badge = "Altitude Apprentice";
   } else {
     grade = "Very Poor";
-    badge = "Breath-Aware";
+    badge = "Base Camp Beginner";
   }
 
   return { score: finalScore, grade, badge };
@@ -301,11 +305,6 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     return Math.max(0, Math.min(100, raw));
   }, [step]);
 
-  const romPercent = useMemo(
-    () => computeRomPercent(formData.romInhale, formData.romExhale),
-    [formData.romInhale, formData.romExhale]
-  );
-
   const updateForm = (name: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -366,10 +365,8 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
   };
 
   const buildPayload = () => {
-    const rom = romPercent ? `${romPercent}%` : "";
     return {
       ...formData,
-      romPercentage: rom,
       timestamp: new Date().toISOString(),
       source: "recal-landing-rbi-modal",
     };
@@ -392,43 +389,30 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
   };
 
   const submitToGoogleForm = async () => {
-    if (!googleFormUrl) return;
-
-    let rom = "";
-    if (romPercent) {
-      rom = romPercent.replace(/[^0-9.]/g, "");
-    } else {
-      const inhaleNum = Number(formData.romInhale);
-      const exhaleNum = Number(formData.romExhale);
-      if (Number.isFinite(inhaleNum) && Number.isFinite(exhaleNum) && exhaleNum > 0) {
-        const calculatedRom = ((inhaleNum - exhaleNum) / exhaleNum) * 1000;
-        if (Number.isFinite(calculatedRom)) {
-          rom = calculatedRom.toFixed(1);
-        }
-      }
-    }
-    const body = new URLSearchParams();
-    body.set("fvv", "1");
-    body.set("draftResponse", "[]");
-    body.set("pageHistory", "0,1,2,3,4,5,6");
-    body.set("fbzx", Date.now().toString());
-    body.set(googleEntryIds.firstName, formData.firstName.trim());
-    body.set(googleEntryIds.lastName, formData.lastName.trim());
-    body.set(googleEntryIds.email, formData.email.trim());
-    body.set(googleEntryIds.goalType, formData.goalType);
-    body.set(googleEntryIds.boltScore, formData.boltScore);
-    body.set(googleEntryIds.co2Score, formData.co2ttScore);
-    body.set(googleEntryIds.mbtScore, formData.mbtSteps);
-    body.set(googleEntryIds.lomZone, formData.lomZone);
-    body.set(googleEntryIds.goalDetail, formData.goalDetail);
-    body.set(googleEntryIds.romScore, rom || "0");
     try {
-      await fetch(googleFormUrl, {
+      const res = await fetch("/api/submit-diagnostic-form", {
         method: "POST",
-        mode: "no-cors",
-        body,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          email: formData.email.trim(),
+          age: formData.age.trim(),
+          gender: formData.gender.trim(),
+          boltScore: formData.boltScore,
+          co2ttScore: formData.co2ttScore,
+          mbtSteps: formData.mbtSteps,
+          lomZone: formData.lomZone,
+          balloon: formData.balloon.trim() || "0",
+          goalType: formData.goalType.trim(),
+          goalDetail: formData.goalDetail.trim(),
+        }),
       });
-      console.log("✅ Google Form submitted successfully. ROM value sent:", rom || "0");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Form submit failed (${res.status})`);
+      }
+      console.log("✅ Google Form submitted successfully.");
     } catch (error) {
       console.error("❌ Google form submission error:", error);
       throw error;
@@ -464,9 +448,10 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
       const co2 = Number(formData.co2ttScore) || 0;
       const mbt = Number(formData.mbtSteps) || 0;
       const lom = formData.lomZone.trim();
-      const rom = romPercent != null ? parseFloat(romPercent) : 0;
+      const balloonCount = Number(formData.balloon) || 0;
+      const age = Number(formData.age) || 0;
 
-      const result = calculateRBI(bolt, co2, mbt, lom, rom);
+      const result = calculateRBI(bolt, co2, mbt, lom, balloonCount, age);
       setAssessmentResult({
         score: String(result.score),
         grade: result.grade,
@@ -500,44 +485,24 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
 
   const isStepValid = () => {
     const requiredByStep: Record<number, (keyof FormData)[]> = {
-      1: ["firstName", "email"],
+      1: ["firstName", "email", "age", "gender"],
       2: ["boltScore"],
       3: ["co2ttScore"],
       4: ["mbtSteps"],
       5: ["lomZone"],
-      6: ["romInhale", "romExhale"],
+      6: ["balloon"],
       7: ["goalType"],
     };
     const requirements = requiredByStep[step];
     if (!requirements) return true;
-    
-    // For step 6 (ROM), also validate that the values are valid numbers and ROM can be calculated
+
     if (step === 6) {
-      const hasValues = requirements.every((key) => formData[key]?.trim().length);
-      if (!hasValues) return false;
-      
-      // Validate ROM calculation
-      const inhaleNum = Number(formData.romInhale);
-      const exhaleNum = Number(formData.romExhale);
-      const isValid = 
-        Number.isFinite(inhaleNum) && 
-        Number.isFinite(exhaleNum) && 
-        exhaleNum > 0 && 
-        romPercent !== null;
-      
-      if (!isValid) {
-        console.warn("ROM validation failed:", {
-          romInhale: formData.romInhale,
-          romExhale: formData.romExhale,
-          inhaleNum,
-          exhaleNum,
-          romPercent,
-        });
-      }
-      
-      return isValid;
+      const balloonVal = formData.balloon?.trim();
+      if (!balloonVal) return false;
+      const num = Number(balloonVal);
+      return Number.isFinite(num) && num >= 0 && num <= 999;
     }
-    
+
     return requirements.every((key) => formData[key]?.trim().length);
   };
 
@@ -587,7 +552,7 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
         <Input
           name="firstName"
           value={formData.firstName}
-          placeholder="Name"
+          placeholder="First name"
           onChange={updateForm}
         />
         <Input
@@ -597,6 +562,33 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
           placeholder="Email"
           onChange={updateForm}
         />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <FieldLabel label="Age" />
+            <Input
+              name="age"
+              value={formData.age}
+              placeholder="e.g. 35"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              shouldAllowOnlyNumbers
+              onChange={updateForm}
+            />
+          </div>
+          <div className="space-y-2">
+            <FieldLabel label="Gender" />
+            <select
+              value={formData.gender}
+              onChange={(e) => updateForm("gender", e.target.value)}
+              className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+            >
+              <option value="">Select</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -749,58 +741,38 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
     );
   };
 
-  const renderRomStep = () => (
+  const renderBalloonStep = () => (
     <div className="grid gap-8 lg:grid-cols-2">
       <div className="space-y-4">
-        <SectionTitle title="Range of Motion" subtitle="Step 6 • ROM" />
+        <SectionTitle title="One-Minute Balloon Test" subtitle="Step 6 • 1BT" />
         <p className="text-base text-slate-700">
-          Measure your rib cage circumference at full inhale and exhale. We’ll translate
-          that into a ROM percentage that reflects how much space you create for oxygen.
-        </p>
-        <p className="text-sm text-slate-600">
-          Formula: <span className="font-semibold text-slate-900">(Inhale - Exhale) / Exhale * 1000</span>
+          In 1 minute, blow up as many balloons as you can. Enter the total count below.
         </p>
         <div className="rounded-2xl border border-slate-200 bg-white/60 p-4 text-sm text-slate-700">
           <p className="font-semibold text-slate-900">What you need:</p>
           <ul className="mt-2 space-y-1 list-disc list-inside">
-            <li>Tape measure or shoelace + ruler</li>
-            <li>Measure at the low ribs</li>
-            <li>Stand tall, stay consistent between measurements</li>
+            <li>Balloons (standard size)</li>
+            <li>Timer set to 1 minute</li>
+            <li>Count each fully inflated balloon</li>
           </ul>
         </div>
       </div>
       <div className="space-y-6">
-        <VideoCard videoId="BTAMfHcT1Zo" caption="" />
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <FieldLabel label="Inhale Circumference" />
-            <Input
-              name="romInhale"
-              value={formData.romInhale}
-              placeholder='e.g. "34.5"'
-              suffix="in / cm"
-              onChange={updateForm}
-            />
-          </div>
-          <div className="space-y-2">
-            <FieldLabel label="Exhale Circumference" />
-            <Input
-              name="romExhale"
-              value={formData.romExhale}
-              placeholder='e.g. "31.2"'
-              suffix="in / cm"
-              onChange={updateForm}
-            />
-          </div>
-        </div>
-        <div className="rounded-2xl bg-[#E9F2F5] p-4 text-sm text-slate-700">
-          <p className="font-semibold text-slate-900">Your ROM %</p>
-          <p className="text-2xl font-bold text-slate-900">{romPercent ? `${romPercent}%` : "—"}</p>
-          {formData.romInhale && formData.romExhale && !romPercent && (
-            <p className="mt-2 text-xs text-amber-600">
-              ⚠️ Please enter valid numbers. Exhale must be greater than 0.
-            </p>
-          )}
+        <VideoCard
+          videoId="OlzOxZJsBN8"
+          caption="Watch the one-minute balloon test demo"
+        />
+        <div className="space-y-2">
+          <FieldLabel label="Number of balloons in 1 minute" />
+          <Input
+            name="balloon"
+            value={formData.balloon}
+            placeholder="e.g. 12"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            shouldAllowOnlyNumbers
+            onChange={updateForm}
+          />
         </div>
       </div>
     </div>
@@ -931,7 +903,7 @@ const renderLoadingStep = (loadingMessageIndex: number, isPostSubmit?: boolean) 
       case 5:
         return renderLomStep();
       case 6:
-        return renderRomStep();
+        return renderBalloonStep();
       case 7:
         return renderGoalStep(formData, updateForm);
       case 8:
@@ -942,7 +914,7 @@ const renderLoadingStep = (loadingMessageIndex: number, isPostSubmit?: boolean) 
         return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, formData, romPercent, loadingMessageIndex, assessmentResult, submissionState]);
+  }, [step, formData, loadingMessageIndex, assessmentResult, submissionState]);
 
   const isLoadingStep = step === modalSteps - 1;
   const isFinalStep = step === modalSteps;
