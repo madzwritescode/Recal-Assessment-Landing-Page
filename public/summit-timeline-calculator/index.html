@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Training Timeline Calculator</title>
+    <link href="style.css" rel="stylesheet" type="text/css" />
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="logo-section">
+        <img src="Recal Logo White in Blue.png" alt="Recal Logo" class="logo" />
+      </div>
+
+      <h1>Training Timeline Calculator</h1>
+
+      <div class="input-section">
+        <label for="mountain">Select Your Mountain:</label>
+        <select id="mountain" required>
+          <option value="">Choose a mountain...</option>
+          <optgroup label="The Seven Summits">
+            <option value="Everest">Everest (Asia)</option>
+            <option value="Aconcagua">Aconcagua (South America)</option>
+            <option value="Denali">Denali (North America)</option>
+            <option value="Kilimanjaro">Kilimanjaro (Africa)</option>
+            <option value="Elbrus">Elbrus (Europe)</option>
+            <option value="Mont Blanc">Mont Blanc / Chamonix (Europe)</option>
+            <option value="Vinson Massif">Vinson Massif (Antarctica)</option>
+            <option value="Carstensz Pyramid">Carstensz Pyramid (Oceania)</option>
+            <option value="Mt. Kosciuszko">Mt. Kosciuszko (Australia)</option>
+          </optgroup>
+          <optgroup label="Other Popular Peaks">
+            <option value="Mt. Rainier">Mt. Rainier</option>
+            <option value="Other">Other</option>
+          </optgroup>
+        </select>
+
+        <label for="departure-date">Expedition Departure Date:</label>
+        <input type="date" id="departure-date" required />
+        <button id="calculate-btn">Calculate</button>
+      </div>
+
+      <div id="results" class="results hidden">
+        <!-- Version label — filled by JS -->
+        <div id="version-header" class="version-header"></div>
+        <!-- Cram-plan warning — shown by JS when < 6 weeks -->
+        <div id="warning-banner" class="warning-banner hidden"></div>
+
+        <h2>Your Preparation Timeline</h2>
+        <p class="timeline-subtitle">
+          Your personalized training schedule for
+          <span id="selected-mountain"></span>
+        </p>
+        <p class="timeline-subtitle" style="font-size: 0.9em; color: #666">
+          Calculation Date (Today):
+          <strong><span id="today-date"></span></strong> | Training Starts:
+          <strong><span id="training-start-date"></span></strong>
+        </p>
+
+        <!-- Accordion week timeline injected here -->
+        <div id="timeline-container" class="visual-timeline"></div>
+
+        <!-- Expedition Date (always shown) -->
+        <div class="visual-timeline">
+          <div class="timeline-phase expedition">
+            <div class="timeline-item summit">
+              <div class="timeline-marker summit"></div>
+              <div class="timeline-content">
+                <div class="timeline-title">🏔️ EXPEDITION DEPARTURE</div>
+                <div class="timeline-description">You're ready for the summit!</div>
+                <div class="timeline-date expedition" id="expedition-date"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Save / export actions -->
+        <div class="result-actions">
+          <button id="print-btn" class="action-btn">🖨️ Print / Save PDF</button>
+          <button id="csv-btn" class="action-btn">📥 Download CSV</button>
+        </div>
+      </div>
+
+      <button id="more-info-btn" class="more-info-btn hidden">
+        <span class="btn-icon">→</span> Get Your Breathwork Training Plan
+      </button>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
