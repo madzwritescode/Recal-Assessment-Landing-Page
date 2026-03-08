@@ -8,12 +8,22 @@ const MORE_INFO_CONFIG = {
 
 // ========================================
 
+// Sends current document height to parent window for iframe auto-resize
+function notifyParentHeight() {
+  const height = document.documentElement.scrollHeight;
+  window.parent.postMessage({ type: 'summit-calc-resize', height }, '*');
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   // Embed mode: ?embed=true adds transparent background
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('embed') === 'true') {
+  const isEmbed = urlParams.get('embed') === 'true';
+  if (isEmbed) {
     document.body.classList.add('embed-mode');
   }
+
+  // Send initial height to parent on load
+  notifyParentHeight();
 
   const calculateBtn = document.getElementById('calculate-btn');
   const moreInfoBtn   = document.getElementById('more-info-btn');
@@ -236,6 +246,9 @@ document.addEventListener('DOMContentLoaded', function () {
     resultsDiv.classList.remove('hidden');
     moreInfoBtn.classList.remove('hidden');
     resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // Notify parent iframe of new height after content renders
+    setTimeout(notifyParentHeight, 400);
   }
 
   // ==========================================
