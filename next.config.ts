@@ -26,6 +26,14 @@ const nextConfig: NextConfig = {
         source: "/training-timeline-calculator/",
         destination: "/training-timeline-calculator/index.html",
       },
+      {
+        source: "/summit-readiness",
+        destination: "/summit-readiness/index.html",
+      },
+      {
+        source: "/summit-readiness/",
+        destination: "/summit-readiness/index.html",
+      },
     ];
   },
 };
