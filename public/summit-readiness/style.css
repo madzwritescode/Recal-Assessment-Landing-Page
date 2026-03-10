@@ -522,8 +522,8 @@ body {
 }
 
 .sr-results-logo {
-  height: 36px;
-  margin-bottom: 20px;
+  height: 56px;
+  margin-bottom: 24px;
   position: relative;
   z-index: 1;
 }
@@ -531,8 +531,9 @@ body {
 .sr-score-circle-wrap {
   position: relative;
   z-index: 1;
-  display: inline-block;
-  margin-bottom: 20px;
+  display: block;
+  width: 160px;
+  margin: 0 auto 20px;
 }
 
 .sr-score-svg {
@@ -551,7 +552,7 @@ body {
 
 .sr-score-number {
   font-family: 'RogueSans', sans-serif;
-  font-size: 2.8rem;
+  font-size: 3rem;
   font-weight: bold;
   font-style: italic;
   color: var(--white);
@@ -777,6 +778,11 @@ body {
   body {
     background: white !important;
     padding: 0;
+    display: block;
+  }
+
+  #app {
+    max-width: 100%;
   }
 
   .sr-progress-wrap,
@@ -794,5 +800,20 @@ body {
     background: var(--navy) !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .sr-domain-bar-fill {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .sr-domain-bar-row {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  @page {
+    margin: 1.5cm;
+    size: A4;
   }
 }

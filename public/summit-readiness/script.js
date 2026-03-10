@@ -463,7 +463,9 @@ function renderQuestion(q, qi, domainIdx) {
         ${q.options.map(opt => `
           <button
             class="sr-option${answers[q.entry] === opt ? ' selected' : ''}"
-            onclick="selectOption(${domainIdx}, ${qi}, ${escHtml(JSON.stringify(opt))})"
+            data-entry="${q.entry}"
+            data-value="${escHtml(opt)}"
+            onclick="selectOption(this, '${q.entry}', ${escHtml(JSON.stringify(opt))})"
           >
             <span class="sr-option-dot"></span>
             <span class="sr-option-text">${escHtml(stripPrefix(opt))}</span>
@@ -546,8 +548,8 @@ function renderResults(app) {
         </div>
 
         <div class="sr-results-cta">
-          <button class="sr-btn-primary" onclick="window.open('${tier.url}', '_blank')">
-            ${tier.cta}
+          <button class="sr-btn-primary" onclick="window.print()">
+            🖨️ Save Results as PDF
           </button>
           <button class="sr-btn-restart" onclick="restart()">
             ↩ Retake Assessment
@@ -560,10 +562,19 @@ function renderResults(app) {
 
 // ─── Event Handlers ───────────────────────────────────────────────────────────
 
-function selectOption(domainIdx, questionIdx, value) {
-  const entry = DOMAINS[domainIdx].questions[questionIdx].entry;
+function selectOption(btn, entry, value) {
   answers[entry] = value;
-  render();
+
+  // Deselect all sibling options for this question (no full re-render = no blink)
+  const optionsGroup = btn.closest('.sr-options');
+  if (optionsGroup) {
+    optionsGroup.querySelectorAll('.sr-option').forEach(b => b.classList.remove('selected'));
+  }
+  btn.classList.add('selected');
+
+  // Enable Next button if all questions in this domain are answered
+  const nextBtn = document.getElementById('sr-next-btn');
+  if (nextBtn) nextBtn.disabled = !allAnsweredForStep();
 }
 
 function handleInfoInput() {
