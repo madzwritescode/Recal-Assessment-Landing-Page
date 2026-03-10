@@ -34,6 +34,14 @@ const nextConfig: NextConfig = {
         source: "/summit-readiness/",
         destination: "/summit-readiness/index.html",
       },
+      {
+        source: "/srs-rbi",
+        destination: "/srs-rbi/index.html",
+      },
+      {
+        source: "/srs-rbi/",
+        destination: "/srs-rbi/index.html",
+      },
     ];
   },
 };

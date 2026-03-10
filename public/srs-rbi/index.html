@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recal Breath Index (RBI) Assessment</title>
+  <meta name="description" content="Take the Recal Breath Index assessment and discover your exact breathing capacity across 5 clinically-grounded tests." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @font-face {
+      font-family: 'RogueSans';
+      src: url('/training-timeline-calculator/fonnts.com-Rogue_Sans_Ext_Bold_It.otf') format('opentype');
+      font-weight: bold;
+      font-style: italic;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background: #0A4367;
+      min-height: 100vh;
+    }
+
+    .font-rogue {
+      font-family: 'RogueSans', -apple-system, sans-serif;
+      font-style: italic;
+      font-weight: bold;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(10,67,103,0.2); border-radius: 3px; }
+
+    /* Step transition */
+    .step-enter { animation: stepIn 0.28s ease both; }
+    @keyframes stepIn {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Spinner */
+    .rbi-spinner {
+      width: 72px; height: 72px;
+      border: 5px solid rgba(10,67,103,0.2);
+      border-top-color: #0A4367;
+      border-radius: 50%;
+      animation: rbispin 0.85s linear infinite;
+    }
+    @keyframes rbispin { to { transform: rotate(360deg); } }
+
+    /* Inputs */
+    .rbi-input {
+      width: 100%;
+      border-radius: 12px;
+      border: 2px solid #e2e8f0;
+      background: #fff;
+      padding: 12px 16px;
+      font-size: 1rem;
+      font-weight: 500;
+      color: #1e293b;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      font-family: inherit;
+    }
+    .rbi-input:focus {
+      border-color: #4A90A4;
+      box-shadow: 0 0 0 3px rgba(74,144,164,0.15);
+    }
+    .rbi-input-wrap { position: relative; }
+    .rbi-input-wrap input { padding-right: 60px; }
+    .rbi-suffix {
+      position: absolute;
+      right: 14px; top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #94a3b8;
+      pointer-events: none;
+    }
+
+    /* Radio option */
+    .rbi-radio {
+      width: 100%;
+      border-radius: 14px;
+      border: 2px solid #e2e8f0;
+      background: #fff;
+      padding: 13px 16px;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-size: 0.9rem;
+      color: #475569;
+      font-family: inherit;
+      display: block;
+    }
+    .rbi-radio:hover { border-color: #cbd5e1; background: #f8fafc; }
+    .rbi-radio.selected {
+      border-color: #4A90A4;
+      background: #E9F2F5;
+      color: #0f172a;
+      font-weight: 600;
+    }
+
+    /* Score ring */
+    .score-svg { transform: rotate(-90deg); display: block; }
+
+    /* Result bar */
+    .result-bar-track {
+      height: 8px;
+      background: #f1f5f9;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .result-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.9s ease;
+    }
+
+    /* Grade colours */
+    .grade-ultra  { color: #7c3aed; }
+    .grade-great  { color: #0A4367; }
+    .grade-good   { color: #2e8b57; }
+    .grade-fair   { color: #c47c1a; }
+    .grade-poor   { color: #dc2626; }
+
+    .bar-ultra  { background: #7c3aed; }
+    .bar-great  { background: #0A4367; }
+    .bar-good   { background: #2e8b57; }
+    .bar-fair   { background: #c47c1a; }
+    .bar-poor   { background: #dc2626; }
+
+    @media (max-width: 640px) {
+      .hide-mobile { display: none; }
+    }
+
+    @media print {
+      body { background: white !important; }
+      #rbi-footer, #back-btn { display: none !important; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="py-8 px-4">
+
+  <div class="max-w-4xl mx-auto">
+
+    <!-- Logo -->
+    <div class="text-center mb-6" id="logo-area">
+      <img src="/training-timeline-calculator/Recal Logo White in Blue.png"
+           alt="Recal Training" class="h-11 mx-auto" />
+    </div>
+
+    <!-- Main card -->
+    <div class="bg-white rounded-[28px] shadow-2xl overflow-hidden" id="main-card">
+
+      <!-- Card header (progress) -->
+      <div class="border-b border-slate-100 bg-white px-6 py-5 sm:px-8" id="card-header">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-xs uppercase tracking-[0.3em] text-slate-400">Recal Breath Index</p>
+            <h1 class="mt-1 text-2xl sm:text-3xl font-rogue" style="color:#0A4367">RBI Assessment</h1>
+            <p class="mt-1 text-sm text-slate-500" id="step-label">Step 1 of 7</p>
+          </div>
+        </div>
+        <div class="mt-5 h-2 w-full rounded-full bg-slate-100">
+          <div class="h-full rounded-full transition-all duration-500"
+               style="background: linear-gradient(to right, #0A4367, #4A90A4); width: 0%"
+               id="progress-bar"></div>
+        </div>
+      </div>
+
+      <!-- Step content -->
+      <div class="px-6 py-6 sm:px-8 overflow-y-auto" style="max-height: calc(100vh - 260px);" id="step-content">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Footer nav -->
+      <div class="border-t border-slate-100 bg-white px-6 py-5 sm:px-8" id="rbi-footer">
+        <div class="flex items-center justify-between">
+          <button onclick="handleBack()" id="back-btn"
+            class="text-sm font-semibold text-slate-500 hover:text-slate-700 transition">
+            Back
+          </button>
+          <button onclick="handleNext()" id="next-btn"
+            class="inline-flex items-center justify-center rounded-2xl px-7 py-3 text-sm font-semibold text-white transition"
+            style="background: linear-gradient(to right, #0A4367, #4A90A4)">
+            Next →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-center text-xs text-white/40 mt-6">
+      © Recal Training · Your data stays on your device
+    </p>
+  </div>
+
+  <script>
+  'use strict';
+
+  // ─── Scoring Logic (exact copy from DiagnosticModal.tsx) ───────────────────
+
+  const getBoltTier = (score) => {
+    if (score < 15) return 0;
+    if (score < 20) return 1;
+    if (score < 25) return 2;
+    if (score < 30) return 3;
+    if (score < 35) return 4;
+    return 5;
+  };
+
+  const getCo2ttTier = (score) => {
+    if (score < 25) return 0;
+    if (score < 40) return 1;
+    if (score < 55) return 2;
+    if (score < 70) return 3;
+    if (score < 85) return 4;
+    return 5;
+  };
+
+  const getMbtTier = (score) => getCo2ttTier(score);
+
+  const getLomTier = (zone) => {
+    const l = zone.toLowerCase().trim();
+    if (l.includes('zone 3 only'))                                         return 0;
+    if (l.includes('zone 3') && l.includes('zone 2'))                     return 1;
+    if (l.includes('zone 2') && !l.includes('zone 3') && !l.includes('zone 1')) return 2;
+    if (l.includes('zone 1') && l.includes('zone 2'))                     return 3;
+    if (l.includes('zone 1') && l.includes('horizontal'))                 return 4;
+    if (l.includes('zone 1') && l.includes('360'))                        return 5;
+    return 0;
+  };
+
+  const get1BTTier = (count) => {
+    if (count < 7)  return 0;
+    if (count < 11) return 1;
+    if (count < 14) return 2;
+    if (count < 17) return 3;
+    if (count < 19) return 4;
+    return 5;
+  };
+
+  const calculateRBI = (bolt, co2, mbt, lom, balloonCount, age) => {
+    const boltScore  = getBoltTier(bolt)        * 1;
+    const co2Score   = getCo2ttTier(co2)        * 2;
+    const mbtScore   = getMbtTier(mbt)          * 3;
+    const lomScore   = getLomTier(lom)          * 2;
+    let   oneBTTier  = get1BTTier(balloonCount);
+    if (age > 65) oneBTTier = Math.min(5, oneBTTier + 1);
+    const oneBTScore = oneBTTier * 2;
+
+    const totalPoints = boltScore + co2Score + mbtScore + lomScore + oneBTScore;
+    const maxPoints   = 5*1 + 5*2 + 5*3 + 5*2 + 5*2; // 50
+    const finalScore  = Math.round((totalPoints / maxPoints) * 100);
+
+    let grade = 'N/A', badge = 'N/A';
+    if      (finalScore >= 93) { grade = 'Ultra';     badge = 'Everest-Ready'; }
+    else if (finalScore >= 80) { grade = 'Great';     badge = 'Summit-Ready'; }
+    else if (finalScore >= 65) { grade = 'Good';      badge = 'Summit-Approaching'; }
+    else if (finalScore >= 50) { grade = 'Fair';      badge = 'Acclimatizing'; }
+    else if (finalScore >= 31) { grade = 'Poor';      badge = 'Altitude Apprentice'; }
+    else                       { grade = 'Very Poor'; badge = 'Base Camp Beginner'; }
+
+    return { score: finalScore, grade, badge };
+  };
+
+  // ─── State ─────────────────────────────────────────────────────────────────
+
+  // Steps: 1=hero+info, 2=bolt, 3=co2tt, 4=mbt, 5=lom, 6=balloon, 7=goal, 8=loading, 9=results
+  let step = 1;
+  const TOTAL_Q_STEPS = 7;
+
+  let formData = {
+    firstName: '', lastName: '', email: '',
+    age: '', gender: '',
+    boltScore: '', co2ttScore: '', mbtSteps: '',
+    lomZone: '', balloon: '',
+    goalType: '', goalDetail: ''
+  };
+
+  // ─── LOM / Goal Options ────────────────────────────────────────────────────
+
+  const LOM_OPTIONS = [
+    'Zone 3 only, vertical movement',
+    'Zone 3, some Zone 2, shoulder movement apparent',
+    'Zone 2',
+    'Zone 1 and a bit of Zone 2, belly movement apparent',
+    'Zone 1, horizontal movement, shoulders = no movement',
+    'Zone 1 and 360° circumferential movement',
+  ];
+
+  const GOAL_OPTIONS = [
+    'Climb a high altitude mountain',
+    'Run an ultra race at altitude',
+    'Run a marathon (or other distance) at or near sea level',
+    'Hiking/trekking in general',
+  ];
+
+  const YT = '?autoplay=0&mute=0&rel=0&modestbranding=1&playsinline=1&color=white';
+
+  // ─── Validation ────────────────────────────────────────────────────────────
+
+  function isStepValid() {
+    switch (step) {
+      case 1: {
+        const { firstName, email, age, gender } = formData;
+        return firstName.trim() && email.trim() && age.trim() && gender.trim();
+      }
+      case 2: return formData.boltScore.trim().length > 0;
+      case 3: return formData.co2ttScore.trim().length > 0;
+      case 4: return formData.mbtSteps.trim().length > 0;
+      case 5: return formData.lomZone.trim().length > 0;
+      case 6: {
+        const v = Number(formData.balloon);
+        return formData.balloon.trim() && Number.isFinite(v) && v >= 0 && v <= 999;
+      }
+      case 7: return formData.goalType.trim().length > 0;
+      default: return true;
+    }
+  }
+
+  // ─── Navigation ────────────────────────────────────────────────────────────
+
+  function handleNext() {
+    if (step === 7) {
+      showLoading();
+      return;
+    }
+    if (step === 9) {
+      // Done — restart
+      restart();
+      return;
+    }
+    if (!isStepValid()) return;
+    step++;
+    render();
+  }
+
+  function handleBack() {
+    if (step === 1 || step === 8 || step === 9) return;
+    step--;
+    render();
+  }
+
+  function restart() {
+    step = 1;
+    formData = {
+      firstName: '', lastName: '', email: '',
+      age: '', gender: '',
+      boltScore: '', co2ttScore: '', mbtSteps: '',
+      lomZone: '', balloon: '',
+      goalType: '', goalDetail: ''
+    };
+    render();
+  }
+
+  function showLoading() {
+    step = 8;
+    render();
+    setTimeout(() => {
+      step = 9;
+      render();
+    }, 2200);
+  }
+
+  // ─── Render dispatcher ─────────────────────────────────────────────────────
+
+  function render() {
+    syncHeader();
+    const content = document.getElementById('step-content');
+    content.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'step-enter space-y-5';
+    wrapper.innerHTML = getStepHTML();
+    content.appendChild(wrapper);
+    syncFooter();
+    attachListeners();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function syncHeader() {
+    const isLoading  = step === 8;
+    const isResults  = step === 9;
+    const header     = document.getElementById('card-header');
+    const footer     = document.getElementById('rbi-footer');
+
+    if (isLoading || isResults) {
+      header.style.display = 'none';
+      footer.style.display = 'none';
+      document.getElementById('logo-area').style.display = 'none';
+    } else {
+      header.style.display = '';
+      footer.style.display = '';
+      document.getElementById('logo-area').style.display = '';
+
+      const pct = Math.max(0, Math.min(100, Math.round(((step - 1) / TOTAL_Q_STEPS) * 100)));
+      document.getElementById('progress-bar').style.width = pct + '%';
+      document.getElementById('step-label').textContent =
+        step <= TOTAL_Q_STEPS ? `Step ${step} of ${TOTAL_Q_STEPS}` : '';
+    }
+  }
+
+  function syncFooter() {
+    const backBtn = document.getElementById('back-btn');
+    const nextBtn = document.getElementById('next-btn');
+    if (!backBtn || !nextBtn) return;
+
+    backBtn.textContent = step === 1 ? 'Cancel' : 'Back';
+    backBtn.disabled = step === 1;
+
+    const valid = isStepValid();
+    nextBtn.disabled = !valid;
+    nextBtn.style.opacity = valid ? '1' : '0.4';
+    nextBtn.style.cursor  = valid ? 'pointer' : 'not-allowed';
+
+    if (step === 7) {
+      nextBtn.textContent = 'Submit Assessment →';
+    } else if (step === 9) {
+      nextBtn.textContent = 'Retake Assessment';
+    } else {
+      nextBtn.textContent = 'Next →';
+    }
+  }
+
+  // ─── Step HTML builders ────────────────────────────────────────────────────
+
+  function getStepHTML() {
+    switch (step) {
+      case 1: return renderHeroStep();
+      case 2: return renderBoltStep();
+      case 3: return renderCo2Step();
+      case 4: return renderMbtStep();
+      case 5: return renderLomStep();
+      case 6: return renderBalloonStep();
+      case 7: return renderGoalStep();
+      case 8: return renderLoadingStep();
+      case 9: return renderResultsStep();
+      default: return '';
+    }
+  }
+
+  function videoCard(videoId, caption) {
+    return `
+      <div class="space-y-2">
+        <div class="aspect-video rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-slate-50">
+          <iframe class="w-full h-full"
+            src="https://www.youtube.com/embed/${videoId}${YT}"
+            title="Recal RBI Video"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen></iframe>
+        </div>
+        ${caption ? `<p class="text-sm text-slate-500">${caption}</p>` : ''}
+      </div>
+    `;
+  }
+
+  function sectionTitle(title, subtitle) {
+    return `
+      <div class="space-y-1">
+        ${subtitle ? `<p class="text-xs uppercase tracking-[0.15em] text-slate-400">${subtitle}</p>` : ''}
+        <h3 class="text-2xl font-rogue" style="color:#0A4367">${title}</h3>
+      </div>
+    `;
+  }
+
+  function inputField(name, placeholder, suffix, inputMode, label) {
+    const val = escHtml(formData[name]);
+    const suffixHtml = suffix
+      ? `<span class="rbi-suffix">${suffix}</span>`
+      : '';
+    return `
+      ${label ? `<p class="text-sm font-medium text-slate-700">${label}</p>` : ''}
+      <div class="rbi-input-wrap">
+        <input
+          class="rbi-input"
+          type="text"
+          inputmode="${inputMode || 'text'}"
+          data-field="${name}"
+          placeholder="${placeholder}"
+          value="${val}"
+          oninput="onInput(this)"
+          ${suffix ? 'style="padding-right:56px"' : ''}
+        />
+        ${suffixHtml}
+      </div>
+    `;
+  }
+
+  function renderHeroStep() {
+    return `
+      <div class="space-y-4">
+        <p class="text-sm uppercase tracking-[0.25em] text-slate-500">The Recal Breath Index</p>
+        <h2 class="text-3xl font-rogue" style="color:#0A4367">Welcome to your RBI assessment.</h2>
+        <p class="text-base text-slate-700">
+          You're about to uncover the exact breathing mechanics shaping your performance.
+        </p>
+        <div class="rounded-2xl border border-slate-200 bg-white/70 p-4">
+          <p class="text-sm font-semibold text-slate-900">What you'll need:</p>
+          <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+            <li>A timer</li>
+            <li>Space to walk in a straight line</li>
+            <li>A tape measure (or shoelace + ruler)</li>
+          </ul>
+        </div>
+        ${videoCard('Cq1DpJsAOAM', '')}
+        <div class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-4">
+          <p class="text-sm font-semibold text-slate-900">
+            Please confirm your details below. Your results will be calculated locally on this page.
+          </p>
+          <div class="space-y-1">
+            <input class="rbi-input" type="text" data-field="firstName" placeholder="First name"
+              value="${escHtml(formData.firstName)}" oninput="onInput(this)" />
+          </div>
+          <div class="space-y-1">
+            <input class="rbi-input" type="email" data-field="email" placeholder="Email"
+              value="${escHtml(formData.email)}" oninput="onInput(this)" />
+          </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="space-y-1">
+              <p class="text-sm font-medium text-slate-700">Age</p>
+              <input class="rbi-input" type="text" inputmode="numeric" data-field="age"
+                placeholder="e.g. 35" value="${escHtml(formData.age)}" oninput="onInputNumeric(this)" />
+            </div>
+            <div class="space-y-1">
+              <p class="text-sm font-medium text-slate-700">Gender</p>
+              <select class="rbi-input" data-field="gender" onchange="onSelectChange(this)">
+                <option value="">Select</option>
+                <option value="Male"   ${formData.gender==='Male'   ? 'selected':''}>Male</option>
+                <option value="Female" ${formData.gender==='Female' ? 'selected':''}>Female</option>
+                <option value="Other"  ${formData.gender==='Other'  ? 'selected':''}>Other</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderBoltStep() {
+    return `
+      <div class="grid gap-8 md:grid-cols-2">
+        <div class="space-y-4">
+          ${sectionTitle('Blood Oxygen Level Test', 'Step 2 · BOLT')}
+          <p class="text-base text-slate-700">
+            Watch and follow along to capture your BOLT score. This reveals how efficiently
+            you tolerate drops in blood CO₂.
+          </p>
+          <div class="rounded-2xl bg-[#E9F2F5] p-4 text-sm text-slate-700">
+            <p class="font-semibold text-slate-900">How to measure:</p>
+            <ul class="mt-2 space-y-1 list-disc list-inside">
+              <li>Take a normal breath in and out.</li>
+              <li>Pinch your nose, start the timer, walk forward, and count until your first urge to breathe.</li>
+              <li>Release gently and note the seconds.</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            <p class="font-semibold">Pro tip:</p>
+            <p class="mt-1">Your first urge may be a swallow reflex, a throat tightening, or a diaphragm shift.
+            Log the score at that very first signal — not dizziness.</p>
+          </div>
+        </div>
+        <div class="space-y-5">
+          ${videoCard('9iIKhj7oyeI', '')}
+          <div class="space-y-2">
+            <p class="text-sm font-medium text-slate-700">BOLT Score</p>
+            <div class="rbi-input-wrap">
+              <input class="rbi-input" type="text" inputmode="decimal" data-field="boltScore"
+                placeholder='e.g. "25"' value="${escHtml(formData.boltScore)}"
+                oninput="onInputNumeric(this)" style="padding-right:52px" />
+              <span class="rbi-suffix">sec</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCo2Step() {
+    return `
+      <div class="grid gap-8 md:grid-cols-2">
+        <div class="space-y-4">
+          ${sectionTitle('Carbon Dioxide Tolerance Test', 'Step 3 · CO₂TT')}
+          <p class="text-base text-slate-700">
+            This test measures how quickly you feel out of breath. Watch the demo, follow the cadence, and capture your score.
+          </p>
+          <div class="rounded-2xl bg-[#E9F2F5] p-4 text-sm text-slate-700">
+            <p class="font-semibold text-slate-900">How to measure:</p>
+            <ul class="mt-2 space-y-1 list-disc list-inside">
+              <li>Sit upright. Take a normal breath in through your nose, then out.</li>
+              <li>Inhale deeply through your nose, filling your lungs as much as comfortably possible.</li>
+              <li>Start your timer as you begin a very slow nasal exhale — keep going until your lungs are empty. That time is your CO₂TT score.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="space-y-5">
+          ${videoCard('XGzAGDv6Q6I', '')}
+          <div class="space-y-2">
+            <p class="text-sm font-medium text-slate-700">CO₂TT Score</p>
+            <div class="rbi-input-wrap">
+              <input class="rbi-input" type="text" inputmode="decimal" data-field="co2ttScore"
+                placeholder='e.g. "68"' value="${escHtml(formData.co2ttScore)}"
+                oninput="onInputNumeric(this)" style="padding-right:52px" />
+              <span class="rbi-suffix">sec</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMbtStep() {
+    return `
+      <div class="grid gap-8 md:grid-cols-2">
+        <div class="space-y-4">
+          ${sectionTitle('Maximum Breathlessness Test', 'Step 4 · MBT')}
+          <p class="text-base text-slate-700">
+            The MBT measures how you handle breathlessness — this time with the added element of walking.
+          </p>
+          <div class="rounded-2xl bg-[#E9F2F5] p-4 text-sm text-slate-700">
+            <p class="font-semibold text-slate-900">How to measure:</p>
+            <ul class="mt-2 space-y-1 list-disc list-inside">
+              <li>Stand with space to walk. Take a normal inhale through your nose, then a normal exhale.</li>
+              <li>Pinch your nose, hold your breath, and start walking at a steady "good hiker's" pace while counting your steps.</li>
+              <li>Continue until you absolutely need to breathe again, then stop and record your total steps.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="space-y-5">
+          ${videoCard('-Kb3O8m8eqk', '')}
+          <div class="space-y-2">
+            <p class="text-sm font-medium text-slate-700">MBT Score</p>
+            <div class="rbi-input-wrap">
+              <input class="rbi-input" type="text" inputmode="numeric" data-field="mbtSteps"
+                placeholder='e.g. "61"' value="${escHtml(formData.mbtSteps)}"
+                oninput="onInputNumeric(this)" style="padding-right:68px" />
+              <span class="rbi-suffix">steps</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderLomStep() {
+    const opts = LOM_OPTIONS.map(label => `
+      <button class="rbi-radio${formData.lomZone === label ? ' selected' : ''}"
+        onclick="selectLom(this, '${escHtml(label).replace(/'/g, '&#39;')}')">
+        ${escHtml(label)}
+      </button>
+    `).join('');
+    return `
+      <div class="grid gap-8 md:grid-cols-2">
+        <div class="space-y-4">
+          ${sectionTitle('Location of Movement', 'Step 5 · LOM')}
+          <p class="text-base text-slate-700">
+            Observe where you feel movement as you breathe. Match your observations to a zone below.
+          </p>
+        </div>
+        <div class="space-y-5">
+          ${videoCard('BD3H3CsU1rs', '')}
+          <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
+            ${opts}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderBalloonStep() {
+    return `
+      <div class="grid gap-8 md:grid-cols-2">
+        <div class="space-y-4">
+          ${sectionTitle('One-Minute Balloon Test', 'Step 6 · 1BT')}
+          <p class="text-base text-slate-700">
+            In 1 minute, blow up as many balloons as you can. Enter the total count below.
+          </p>
+          <div class="rounded-2xl border border-slate-200 bg-white/60 p-4 text-sm text-slate-700">
+            <p class="font-semibold text-slate-900">What you need:</p>
+            <ul class="mt-2 space-y-1 list-disc list-inside">
+              <li>Standard-size balloons</li>
+              <li>Timer set to 1 minute</li>
+              <li>Count each fully inflated balloon</li>
+            </ul>
+          </div>
+        </div>
+        <div class="space-y-5">
+          ${videoCard('OlzOxZJsBN8', 'Watch the one-minute balloon test demo')}
+          <div class="space-y-2">
+            <p class="text-sm font-medium text-slate-700">Number of balloons in 1 minute</p>
+            <input class="rbi-input" type="text" inputmode="numeric" data-field="balloon"
+              placeholder="e.g. 12" value="${escHtml(formData.balloon)}"
+              oninput="onInputNumeric(this)" />
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderGoalStep() {
+    const opts = GOAL_OPTIONS.map(o => `
+      <option value="${escHtml(o)}" ${formData.goalType === o ? 'selected' : ''}>${escHtml(o)}</option>
+    `).join('');
+    return `
+      <div class="space-y-5">
+        ${sectionTitle('What are you training for?', 'Step 7 · Goal')}
+        <p class="text-base text-slate-700">
+          This helps us benchmark your RBI against the mission ahead.
+        </p>
+        <div class="space-y-2">
+          <p class="text-sm font-medium text-slate-700">My current goal is</p>
+          <select class="rbi-input" data-field="goalType" onchange="onSelectChange(this)">
+            <option value="">Select a goal</option>
+            ${opts}
+          </select>
+        </div>
+        <div class="space-y-2">
+          <p class="text-sm font-medium text-slate-700">Tell us more about your goal <span class="text-slate-400 font-normal">(optional)</span></p>
+          <textarea class="rbi-input" data-field="goalDetail" rows="4"
+            placeholder="e.g. &quot;Mt. Rainier in July&quot;&#10;&quot;Leadville 100 in August&quot;&#10;&quot;Everest Base Camp this fall&quot;"
+            oninput="onTextareaInput(this)"
+            style="resize:vertical"
+          >${escHtml(formData.goalDetail)}</textarea>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderLoadingStep() {
+    return `
+      <div class="flex flex-col items-center justify-center py-24 text-center space-y-6 min-h-[50vh]">
+        <img src="/training-timeline-calculator/Recal Logo White in Blue.png" alt="Recal" class="h-10 mx-auto mb-4" />
+        <div class="rbi-spinner mx-auto"></div>
+        <div class="space-y-2">
+          <p class="text-2xl font-rogue" style="color:#0A4367">Calculating your RBI…</p>
+          <p class="text-sm text-slate-500">Running your scores across 5 tests</p>
+          <p class="text-xs uppercase tracking-[0.3em] text-slate-400">This takes 2–3 seconds</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderResultsStep() {
+    const bolt   = Number(formData.boltScore)  || 0;
+    const co2    = Number(formData.co2ttScore) || 0;
+    const mbt    = Number(formData.mbtSteps)   || 0;
+    const lom    = formData.lomZone.trim();
+    const bloons = Number(formData.balloon)    || 0;
+    const age    = Number(formData.age)        || 0;
+
+    const result = calculateRBI(bolt, co2, mbt, lom, bloons, age);
+
+    // Individual tiers (raw, for display)
+    let btTier = get1BTTier(bloons);
+    if (age > 65) btTier = Math.min(5, btTier + 1);
+
+    const tests = [
+      { name: 'BOLT',                label: 'Blood Oxygen Level Test',       tier: getBoltTier(bolt),    weight: 1, raw: bolt + ' sec',  desc: 'CO₂ tolerance (breath-hold)' },
+      { name: 'CO₂TT',               label: 'CO₂ Tolerance Test',            tier: getCo2ttTier(co2),    weight: 2, raw: co2 + ' sec',   desc: 'Slow nasal exhale capacity' },
+      { name: 'MBT',                 label: 'Maximum Breathlessness Test',    tier: getMbtTier(mbt),      weight: 3, raw: mbt + ' steps', desc: 'Breathlessness under movement' },
+      { name: 'LOM',                 label: 'Location of Movement',          tier: getLomTier(lom),      weight: 2, raw: lom || '—',     desc: 'Respiratory mechanics & pattern' },
+      { name: '1BT',                 label: 'One-Minute Balloon Test',        tier: btTier,               weight: 2, raw: bloons + ' balloons', desc: 'Respiratory muscle power' },
+    ];
+
+    const strongest = [...tests].sort((a, b) => b.tier - a.tier)[0];
+    const weakest   = [...tests].sort((a, b) => a.tier - b.tier)[0];
+
+    const gradeClass = {
+      'Ultra': 'grade-ultra', 'Great': 'grade-great', 'Good': 'grade-good',
+      'Fair': 'grade-fair', 'Poor': 'grade-poor', 'Very Poor': 'grade-poor'
+    }[result.grade] || 'grade-fair';
+
+    // SVG circle
+    const r = 60, circ = 2 * Math.PI * r;
+    const offset = circ - (result.score / 100) * circ;
+
+    const tierLabel = (t) => ['Critical gap','Below average','Average','Above average','Strong','Elite'][t] || '—';
+    const barClass  = (t) => ['bar-poor','bar-poor','bar-fair','bar-good','bar-great','bar-ultra'][t] || 'bar-fair';
+
+    const testBars = tests.map(t => `
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <div>
+            <span class="text-sm font-semibold text-slate-800">${t.name}</span>
+            <span class="text-xs text-slate-400 ml-2">${t.label}</span>
+          </div>
+          <span class="text-xs font-semibold text-slate-500">${tierLabel(t.tier)} · ${t.raw}</span>
+        </div>
+        <div class="result-bar-track">
+          <div class="result-bar-fill ${barClass(t.tier)}" style="width:${Math.round((t.tier/5)*100)}%"></div>
+        </div>
+      </div>
+    `).join('');
+
+    const strongLink = `
+      <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+        <p class="text-xs uppercase tracking-[0.15em] text-emerald-600 font-semibold mb-1">💪 Strongest Link</p>
+        <p class="text-base font-semibold text-emerald-900">${strongest.label}</p>
+        <p class="text-sm text-emerald-700 mt-1">${strongest.desc} — <strong>Tier ${strongest.tier}/5</strong></p>
+      </div>
+    `;
+
+    const weakLink = `
+      <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+        <p class="text-xs uppercase tracking-[0.15em] text-rose-600 font-semibold mb-1">🎯 Priority Area</p>
+        <p class="text-base font-semibold text-rose-900">${weakest.label}</p>
+        <p class="text-sm text-rose-700 mt-1">${weakest.desc} — <strong>Tier ${weakest.tier}/5</strong>. This is your highest-leverage area to develop.</p>
+      </div>
+    `;
+
+    const goalBlock = formData.goalType ? `
+      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-xs uppercase tracking-[0.15em] text-slate-500 font-semibold mb-2">Your Goal</p>
+        <p class="text-base font-semibold text-slate-900">${escHtml(formData.goalType)}</p>
+        ${formData.goalDetail ? `<p class="text-sm italic text-slate-600 mt-1">"${escHtml(formData.goalDetail)}"</p>` : ''}
+      </div>
+    ` : '';
+
+    return `
+      <!-- Results header -->
+      <div class="-mx-6 sm:-mx-8 -mt-6 rounded-t-[28px] overflow-hidden" style="background:linear-gradient(135deg,#062a44 0%,#0A4367 100%); padding:40px 32px 36px;">
+        <img src="/training-timeline-calculator/Recal Logo White in Blue.png" alt="Recal" class="h-11 mx-auto mb-6 block" />
+
+        <!-- Score circle -->
+        <div class="flex justify-center mb-5">
+          <div class="relative" style="width:148px;height:148px;">
+            <svg class="score-svg" width="148" height="148" viewBox="0 0 148 148">
+              <circle cx="74" cy="74" r="${r}" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="12"/>
+              <circle cx="74" cy="74" r="${r}" fill="none" stroke="white" stroke-width="12"
+                stroke-dasharray="${circ.toFixed(2)}"
+                stroke-dashoffset="${offset.toFixed(2)}"
+                stroke-linecap="round"/>
+            </svg>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;line-height:1;">
+              <span class="font-rogue" style="font-size:2.8rem;color:white;display:block;">${result.score}</span>
+              <span style="font-size:0.8rem;color:rgba(255,255,255,0.6);">/ 100</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-center space-y-1">
+          <div style="display:inline-block;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);
+            color:white;font-size:0.7rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;
+            padding:4px 14px;border-radius:99px;margin-bottom:8px;">
+            Recal Breath Index
+          </div>
+          <p class="font-rogue text-white" style="font-size:1.8rem;">${result.grade}</p>
+          <p style="color:rgba(255,255,255,0.75);font-size:0.9rem;font-weight:600;">
+            🏔️ ${result.badge}
+          </p>
+          <p style="color:rgba(255,255,255,0.55);font-size:0.8rem;">
+            ${formData.firstName ? escHtml(formData.firstName) + '\'s score · ' : ''}${new Date().toLocaleDateString('en-US', {month:'long', year:'numeric'})}
+          </p>
+        </div>
+      </div>
+
+      <!-- Results body -->
+      <div class="space-y-6 pt-4">
+        <!-- Test breakdown -->
+        <div>
+          <p class="text-xs uppercase tracking-[0.12em] text-slate-400 font-semibold mb-4">Performance by Test</p>
+          <div class="space-y-4">${testBars}</div>
+        </div>
+
+        <!-- Strongest & weakest -->
+        <div class="grid gap-3 sm:grid-cols-2">
+          ${strongLink}
+          ${weakLink}
+        </div>
+
+        ${goalBlock}
+
+        <!-- Actions -->
+        <div class="flex flex-col sm:flex-row gap-3 pt-2 no-print">
+          <button onclick="window.print()"
+            class="flex-1 rounded-2xl border-2 border-slate-200 bg-white text-slate-700 px-6 py-3 text-sm font-semibold hover:border-slate-300 transition">
+            🖨️ Save as PDF
+          </button>
+          <button onclick="restart()"
+            class="flex-1 rounded-2xl text-sm font-semibold text-white px-6 py-3 transition"
+            style="background:linear-gradient(to right,#0A4367,#4A90A4)">
+            ↩ Retake Assessment
+          </button>
+        </div>
+
+        <p class="text-xs text-slate-400 text-center pb-2">
+          Your data was calculated locally and never sent to a server.
+        </p>
+      </div>
+    `;
+  }
+
+  // ─── Input handlers ────────────────────────────────────────────────────────
+
+  function onInput(el) {
+    formData[el.dataset.field] = el.value;
+    syncFooter();
+  }
+
+  function onInputNumeric(el) {
+    const clean = el.value.replace(/[^0-9.]/g, '');
+    el.value = clean;
+    formData[el.dataset.field] = clean;
+    syncFooter();
+  }
+
+  function onSelectChange(el) {
+    formData[el.dataset.field] = el.value;
+    syncFooter();
+  }
+
+  function onTextareaInput(el) {
+    formData[el.dataset.field] = el.value;
+    syncFooter();
+  }
+
+  function selectLom(btn, value) {
+    formData.lomZone = value;
+    // Update visual state without full re-render
+    btn.closest('.space-y-2, .space-y-3, .max-h-72')
+       .querySelectorAll('.rbi-radio')
+       .forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    syncFooter();
+  }
+
+  function attachListeners() {
+    // Keyboard: Enter advances to next step
+    document.getElementById('step-content').querySelectorAll('input').forEach(el => {
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); handleNext(); }
+      });
+    });
+  }
+
+  // ─── Utility ───────────────────────────────────────────────────────────────
+
+  function escHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ─── Boot ──────────────────────────────────────────────────────────────────
+
+  document.addEventListener('DOMContentLoaded', render);
+  </script>
+
+</body>
+</html>
