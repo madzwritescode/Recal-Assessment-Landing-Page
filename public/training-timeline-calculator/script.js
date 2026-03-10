@@ -88,12 +88,24 @@ document.addEventListener('DOMContentLoaded', function () {
     // M2 starts at week (totalWeeks - 4); minimum week 2
     const m2WeekNumber = Math.max(2, totalWeeks - 4);
 
-    // Week date = trainingStart + (weekIndex * 7 days)
+    // Taper ALWAYS anchors backward from expedition — the final 7 days before departure
+    const taperDate = new Date(expeditionDate);
+    taperDate.setDate(taperDate.getDate() - 7);
+
+    // Week date: forward from trainingStart for all weeks except the taper week,
+    // which always uses the backward-anchored taperDate
     function weekDate(w) {
+      if (w === totalWeeks) return new Date(taperDate);
       const d = new Date(trainingStart);
       d.setDate(d.getDate() + (w - 1) * 7);
       return d;
     }
+
+    // Check whether there's a gap between the end of the "Finish M+M2" week
+    // and when the taper week actually starts (remainder days = 0–6)
+    const finishWeekEnd = weekDate(totalWeeks - 1);
+    finishWeekEnd.setDate(finishWeekEnd.getDate() + 7);
+    const bufferDays = Math.round((taperDate - finishWeekEnd) / (1000 * 60 * 60 * 24));
 
     // ==========================================
     // VERSION HEADER
@@ -191,6 +203,14 @@ document.addEventListener('DOMContentLoaded', function () {
         activities  = [
           { label: 'Finish', detail: 'Modules M + M2', isSendoff: false }
         ];
+        // If there are leftover days before taper, prompt the user to keep going
+        if (bufferDays > 0) {
+          activities.push({
+            label: 'Continue',
+            detail: `Modules M + M2 until your Taper Week begins on ${formatDate(taperDate)}`,
+            isSendoff: false
+          });
+        }
 
       // ---- WEEK totalWeeks: Taper + Final Assessment + Send-off ----
       } else if (w === totalWeeks) {
