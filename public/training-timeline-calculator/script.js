@@ -23,6 +23,39 @@ function getWorkbookUrl(weeks) {
 }
 
 // ========================================
+// GOOGLE FORM — SAVE MY ROADMAP
+// entry.869802007  = Email
+// entry.583038684  = Training Start Date (DD/MM/YY)
+// entry.422682755  = Peak / Expedition Date (DD/MM/YY)
+// entry.2086515229 = Workbook Type (e.g. "12-Week Program")
+// ========================================
+const TIMELINE_FORM_URL =
+  'https://docs.google.com/forms/d/e/1FAIpQLSdW4iGddXid5bwavCldMZAFHVBxj_gCG5hFnLt2Ibvsd7EeRA/formResponse';
+
+async function submitTimelineData(email, trainingStart, expeditionDate, totalWeeks) {
+  const fmt = (d) => {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
+  };
+
+  const body = new URLSearchParams({
+    'entry.869802007':  email,
+    'entry.583038684':  fmt(trainingStart),
+    'entry.422682755':  fmt(expeditionDate),
+    'entry.2086515229': `${totalWeeks}-Week Program`,
+  });
+
+  // Fire-and-forget — no-cors so we never read the response
+  fetch(TIMELINE_FORM_URL, {
+    method: 'POST',
+    mode:   'no-cors',
+    body,
+  }).catch(e => console.warn('[Timeline] form submission warning:', e));
+}
+
+// ========================================
 
 // Sends current document height to parent window for iframe auto-resize
 function notifyParentHeight() {
@@ -62,9 +95,15 @@ document.addEventListener('DOMContentLoaded', function () {
   function calculateTimeline() {
     const mountain      = document.getElementById('mountain').value;
     const departureDate = document.getElementById('departure-date').value;
+    const email         = document.getElementById('email').value.trim();
 
     if (!mountain)      { alert('Please select a mountain'); return; }
     if (!departureDate) { alert('Please select a departure date'); return; }
+    if (!email)         { alert('Please enter your email address'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      alert('Please enter a valid email address');
+      return;
+    }
 
     const expeditionDate = new Date(departureDate + 'T00:00:00');
     const today = new Date();
@@ -281,6 +320,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Update workbook CTA button for this specific week version
     moreInfoBtn.innerHTML = `<span class="btn-icon">📥</span> Download Your ${totalWeeks}-Week Training Workbook`;
     moreInfoBtn.dataset.workbookUrl = getWorkbookUrl(totalWeeks);
+
+    // Silent background submission — fires before results are shown
+    submitTimelineData(email, trainingStart, expeditionDate, totalWeeks);
 
     // Show results
     const resultsDiv = document.getElementById('results');

@@ -80,7 +80,8 @@ label {
 }
 
 select,
-input[type="date"] {
+input[type="date"],
+input[type="email"] {
   padding: 12px 15px;
   font-size: 1rem;
   border: 2px solid #A2C2C7;
@@ -92,7 +93,8 @@ input[type="date"] {
 }
 
 select:focus,
-input[type="date"]:focus {
+input[type="date"]:focus,
+input[type="email"]:focus {
   outline: none;
   border-color: #0A4367;
   box-shadow: 0 0 0 3px rgba(10, 67, 103, 0.1);
