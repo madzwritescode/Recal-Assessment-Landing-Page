@@ -6,8 +6,6 @@
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const FORM_ACTION = 'https://docs.google.com/forms/d/e/1FAIpQLSchaXGfiaO3ynpzwmy2keiSQGRKDsoZVqDyAOdztWyq_iVMAA/formResponse';
-
 const DOMAINS = [
   {
     id: 'aerobic',
@@ -628,35 +626,39 @@ function restart() {
 
 // ─── Google Form Submission ───────────────────────────────────────────────────
 
+function getAnswerForEntry(entryId) {
+  return answers[entryId] || '';
+}
+
 function submitToGoogleForm() {
-  try {
-    const form = document.createElement('form');
-    form.action = FORM_ACTION;
-    form.method = 'POST';
-    form.target = 'sr-hidden-iframe';
-    form.style.display = 'none';
+  // Map answers to named keys the API route expects
+  const payload = {
+    firstName,
+    email,
+    q1:  getAnswerForEntry('entry.1002851429'),
+    q2:  getAnswerForEntry('entry.158149559'),
+    q3:  getAnswerForEntry('entry.197086545'),
+    q4:  getAnswerForEntry('entry.1995005739'),
+    q5:  getAnswerForEntry('entry.1392028128'),
+    q6:  getAnswerForEntry('entry.1044599284'),
+    q7:  getAnswerForEntry('entry.1358412920'),
+    q8:  getAnswerForEntry('entry.1064566425'),
+    q9:  getAnswerForEntry('entry.1128018511'),
+    q10: getAnswerForEntry('entry.2007665370'),
+    q11: getAnswerForEntry('entry.346723911'),
+    q12: getAnswerForEntry('entry.1174770986'),
+    q13: getAnswerForEntry('entry.502239037'),
+    q14: getAnswerForEntry('entry.444849892'),
+  };
 
-    const fields = {
-      'entry.1328606392': firstName,
-      'entry.1362361142': email,
-      ...answers
-    };
-
-    Object.entries(fields).forEach(([name, value]) => {
-      const input = document.createElement('input');
-      input.type  = 'hidden';
-      input.name  = name;
-      input.value = value || '';
-      form.appendChild(input);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
-  } catch (e) {
-    // Silent fail — results display regardless
-    console.warn('Form submission error:', e);
-  }
+  fetch('/api/submit-summit-readiness', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(res => res.ok ? res.json() : Promise.reject(res.status))
+    .then(() => console.log('✅ Summit Readiness submitted'))
+    .catch(err => console.warn('Form submission error:', err));
 }
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
