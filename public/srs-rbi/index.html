@@ -356,7 +356,77 @@
     render();
   }
 
+  // ─── Shared result computation ────────────────────────────────────────────
+  // Called once in showLoading (for submission) and once in renderResultsStep
+  // (for display). Deterministic — same inputs always produce same output.
+  function computeRBIResults() {
+    const bolt   = Number(formData.boltScore)  || 0;
+    const co2    = Number(formData.co2ttScore) || 0;
+    const mbt    = Number(formData.mbtSteps)   || 0;
+    const lom    = formData.lomZone.trim();
+    const bloons = Number(formData.balloon)    || 0;
+    const age    = Number(formData.age)        || 0;
+
+    const result = calculateRBI(bolt, co2, mbt, lom, bloons, age);
+
+    let btTier = get1BTTier(bloons);
+    if (age > 65) btTier = Math.min(5, btTier + 1);
+
+    const tests = [
+      { name: 'BOLT',  tier: getBoltTier(bolt) },
+      { name: 'CO2TT', tier: getCo2ttTier(co2) },
+      { name: 'MBT',   tier: getMbtTier(mbt) },
+      { name: 'LOM',   tier: getLomTier(lom) },
+      { name: '1BT',   tier: btTier },
+    ];
+
+    const strongest = [...tests].sort((a, b) => b.tier - a.tier)[0];
+    const weakest   = [...tests].sort((a, b) => a.tier - b.tier)[0];
+
+    return { result, strongest, weakest };
+  }
+
+  // ─── Google Form submission ────────────────────────────────────────────────
+  const RBI_FORM_URL =
+    'https://docs.google.com/forms/d/e/1FAIpQLSflCSHOxkssnM0IaHBpdbtwAOoxz7y61djtWNJGYQ4VTqiztA/formResponse';
+
+  function submitToGoogleForm(computed) {
+    const { result, strongest, weakest } = computed;
+
+    const body = new URLSearchParams({
+      'entry.1858000121': formData.firstName,
+      'entry.488433054':  formData.email,
+      'entry.2039481145': formData.age,
+      'entry.489393189':  formData.gender,
+      'entry.1880815041': formData.boltScore,
+      'entry.2062254424': formData.co2ttScore,
+      'entry.837325677':  formData.mbtSteps,
+      'entry.104410554':  formData.lomZone,
+      'entry.496427865':  formData.balloon,
+      'entry.357800876':  formData.goalDetail,
+      'entry.1823589595': formData.goalType,
+      'entry.1740075512': String(result.score),
+      'entry.556042623':  result.grade,
+      'entry.1504433363': result.badge,
+      'entry.2096312707': weakest.name,
+      'entry.1078081452': strongest.name,
+    });
+
+    // Fire-and-forget — no-cors means we never read the response.
+    // Google Forms still records the submission.
+    fetch(RBI_FORM_URL, {
+      method: 'POST',
+      mode:   'no-cors',
+      body,
+    }).catch(e => console.warn('[RBI] form submission warning:', e));
+  }
+
   function showLoading() {
+    // Compute & submit BEFORE showing loading screen so data is in flight
+    // the moment the user sees the spinner.
+    const computed = computeRBIResults();
+    submitToGoogleForm(computed);
+
     step = 8;
     render();
     setTimeout(() => {
