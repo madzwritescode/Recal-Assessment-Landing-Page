@@ -86,20 +86,21 @@ document.addEventListener('DOMContentLoaded', function () {
     // ==========================================
     // ACCORDION VERSION LOGIC
     //
-    // totalWeeks: how many full 7-day training weeks fit (min 6)
+    // totalWeeks: how many full 7-day training weeks fit (min 5)
     // m2WeekNumber: week Module M2 starts = totalWeeks - 4
     //   → always gives exactly 4 weeks of M2 before Taper:
     //       M2 start | +1 Continue | +2 Continue | Finish | Taper
     //
     // Examples:
+    //   5-week  → m2Week = 2 (M2 starts same week as M, 1 continue week)
     //   6-week  → m2Week = 2 (M2 starts same week as M)
     //   7-week  → m2Week = 3
     //  11-week  → m2Week = 7
     // ==========================================
 
     const rawWeeks   = Math.floor(daysUntilExpedition / 7);
-    const totalWeeks = Math.max(6, rawWeeks);
-    const isCram     = rawWeeks < 6;
+    const totalWeeks = Math.max(5, rawWeeks);
+    const isCram     = rawWeeks < 5;
 
     // M2 starts at week (totalWeeks - 4); minimum week 2
     const m2WeekNumber = Math.max(2, totalWeeks - 4);
