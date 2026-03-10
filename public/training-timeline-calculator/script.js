@@ -1,10 +1,26 @@
 // ========================================
-// CTA BUTTON CONFIGURATION
+// WORKBOOK LINKS — one PDF per week version
+// Anything over 16 weeks uses the 16-week workbook
 // ========================================
-const MORE_INFO_CONFIG = {
-  type: 'url',
-  url: 'https://basecamp.recal.training/spaces/19143057/content'
+const WORKBOOK_LINKS = {
+  5:  'https://media2-production.mightynetworks.com/asset/d35a4e3e-c4b5-4084-a51e-334fd3df9c56/SUMMIT-Ready_Workbook_-_5-Week_Program.pdf',
+  6:  'https://media2-production.mightynetworks.com/asset/3b0d69c6-09e5-4df5-a2ec-98a85b05ac9f/SUMMIT-Ready_Workbook_-_6-Week_Program.pdf',
+  7:  'https://media2-production.mightynetworks.com/asset/afeb4cdd-b2d7-4a35-bf67-561626d43ac2/SUMMIT-Ready_Workbook_-_7-Week_Program.pdf',
+  8:  'https://media2-production.mightynetworks.com/asset/1d88d117-e088-454d-a652-76e6cd21f15a/SUMMIT-Ready_Workbook_-_8-Week_Program.pdf',
+  9:  'https://media2-production.mightynetworks.com/asset/d9775356-7533-4dfa-b51f-2599c5c4e66e/SUMMIT-Ready_Workbook_-_9-Week_Program.pdf',
+  10: 'https://media2-production.mightynetworks.com/asset/a2b99444-e023-4be1-bc8d-75bb7058aeba/SUMMIT-Ready_Workbook_-_10-Week_Program.pdf',
+  11: 'https://media2-production.mightynetworks.com/asset/8387e73e-5c49-4519-b95c-ae61f0b2c169/SUMMIT-Ready_Workbook_-_11-Week_Program.pdf',
+  12: 'https://media2-production.mightynetworks.com/asset/454ea31c-4c08-485c-ad2a-638f87eee86c/SUMMIT-Ready_Workbook_-_12-Week_Program.pdf',
+  13: 'https://media2-production.mightynetworks.com/asset/f4948b9e-9b84-4b11-8ca6-be288b918f7f/SUMMIT-Ready_Workbook_-_13-Week_Program.pdf',
+  14: 'https://media2-production.mightynetworks.com/asset/eda1e623-2235-4812-83d6-1e88258b0c17/SUMMIT-Ready_Workbook_-_14-Week_Program.pdf',
+  15: 'https://media2-production.mightynetworks.com/asset/7550fca4-a4e6-49ec-b73b-259c2cc2f671/SUMMIT-Ready_Workbook_-_15-Week_Program.pdf',
+  16: 'https://media2-production.mightynetworks.com/asset/696c7b10-601a-4769-8936-a758caa4176c/SUMMIT-Ready_Workbook_-_16-Week_Program.pdf',
 };
+
+function getWorkbookUrl(weeks) {
+  const capped = Math.min(weeks, 16);
+  return WORKBOOK_LINKS[capped] || WORKBOOK_LINKS[16];
+}
 
 // ========================================
 
@@ -261,6 +277,10 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('expedition-date').textContent     = formatDate(expeditionDate);
     document.getElementById('selected-mountain').textContent   = mountain;
 
+    // Update workbook CTA button for this specific week version
+    moreInfoBtn.innerHTML = `<span class="btn-icon">📥</span> Download Your ${totalWeeks}-Week Training Workbook`;
+    moreInfoBtn.dataset.workbookUrl = getWorkbookUrl(totalWeeks);
+
     // Show results
     const resultsDiv = document.getElementById('results');
     resultsDiv.classList.remove('hidden');
@@ -304,18 +324,10 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function handleMoreInfo() {
-    const config = MORE_INFO_CONFIG;
-    if (config.type === 'url') {
-      const w = window.open(config.url, '_blank', 'noopener,noreferrer');
-      if (w) w.focus();
-      else window.location.href = config.url;
-    } else if (config.type === 'pdf') {
-      const link  = document.createElement('a');
-      link.href   = config.pdfPath;
-      link.download = config.fileName || 'info.pdf';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+    const url = moreInfoBtn.dataset.workbookUrl;
+    if (!url) return;
+    const w = window.open(url, '_blank', 'noopener,noreferrer');
+    if (w) w.focus();
+    else window.location.href = url;
   }
 });
