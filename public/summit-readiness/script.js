@@ -366,7 +366,6 @@ function renderIntro(app) {
     <div class="sr-card">
       <div class="sr-intro">
         <img src="/training-timeline-calculator/Recal Logo White in Blue.png" alt="Recal Training" class="sr-logo" />
-        <div class="sr-intro-tag">Free Assessment</div>
         <h1>Summit Readiness Assessment</h1>
         <p class="sr-intro-desc">
           Discover exactly how prepared your body and mind are for a high-altitude expedition.
@@ -464,7 +463,7 @@ function renderQuestion(q, qi, domainIdx) {
         ${q.options.map(opt => `
           <button
             class="sr-option${answers[q.entry] === opt ? ' selected' : ''}"
-            onclick="selectOption(${domainIdx}, ${qi}, ${JSON.stringify(opt)})"
+            onclick="selectOption(${domainIdx}, ${qi}, ${escHtml(JSON.stringify(opt))})"
           >
             <span class="sr-option-dot"></span>
             <span class="sr-option-text">${escHtml(stripPrefix(opt))}</span>
@@ -564,11 +563,6 @@ function renderResults(app) {
 function selectOption(domainIdx, questionIdx, value) {
   const entry = DOMAINS[domainIdx].questions[questionIdx].entry;
   answers[entry] = value;
-  // Re-render just the domain step to reflect selection + enable Next
-  renderDomain(document.getElementById('app').querySelector('.sr-card').parentElement
-    ? document.getElementById('app') : document.getElementById('app'), domainIdx);
-
-  // Actually we need a targeted re-render. Easiest: full render.
   render();
 }
 
