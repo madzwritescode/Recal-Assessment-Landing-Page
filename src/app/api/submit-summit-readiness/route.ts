@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const body = new URLSearchParams();
     body.set("fvv", "1");
     body.set("draftResponse", "[]");
-    body.set("pageHistory", "0,1");
+    body.set("pageHistory", "0,1,2,3,4,5,6,7,8");
     body.set("fbzx", Date.now().toString());
 
     body.set(ENTRY_IDS.firstName, String(data.firstName ?? "").trim());
