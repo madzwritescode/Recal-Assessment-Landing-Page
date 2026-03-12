@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
 
-const FORM_URL =
+const FORM_VIEW_URL =
+  "https://docs.google.com/forms/d/e/1FAIpQLSchaXGfiaO3ynpzwmy2keiSQGRKDsoZVqDyAOdztWyq_iVMAA/viewform";
+const FORM_SUBMIT_URL =
   "https://docs.google.com/forms/d/e/1FAIpQLSchaXGfiaO3ynpzwmy2keiSQGRKDsoZVqDyAOdztWyq_iVMAA/formResponse";
+
+/** Extract fbzx (form boundary token) from form HTML - required for Google Forms to accept submission */
+async function fetchFbzx(): Promise<string> {
+  const res = await fetch(FORM_VIEW_URL, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; SummitReadiness/1.0)" },
+  });
+  const html = await res.text();
+  const match = html.match(/fbzx["\s]+value=["']?([^"'\s>]+)/i) ||
+    html.match(/name=["']?fbzx["']?[^>]+value=["']?([^"'\s>]+)/i);
+  return match?.[1]?.trim() || Date.now().toString();
+}
 
 const ENTRY_IDS = {
   firstName: "entry.1328606392",
@@ -26,11 +39,14 @@ export async function POST(request: Request) {
   try {
     const data = await request.json();
 
+    const fbzx = await fetchFbzx();
+
     const body = new URLSearchParams();
     body.set("fvv", "1");
     body.set("draftResponse", "[]");
     body.set("pageHistory", "0,1,2,3,4,5,6,7,8");
-    body.set("fbzx", Date.now().toString());
+    body.set("fbzx", fbzx);
+    body.set("submit", "Submit");
 
     body.set(ENTRY_IDS.firstName, String(data.firstName ?? "").trim());
     body.set(ENTRY_IDS.email,     String(data.email ?? "").trim());
@@ -58,7 +74,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const res = await fetch(FORM_URL, {
+    const res = await fetch(FORM_SUBMIT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
