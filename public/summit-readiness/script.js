@@ -624,91 +624,49 @@ function restart() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ─── Google Form Submission ───────────────────────────────────────────────────
+// ─── Google Form Submission (SRS RBI-style, no API route) ─────────────────────
 
-const FORM_SUBMIT_URL =
+const SR_FORM_URL =
   'https://docs.google.com/forms/d/e/1FAIpQLSchaXGfiaO3ynpzwmy2keiSQGRKDsoZVqDyAOdztWyq_iVMAA/formResponse';
-
-const ENTRY_IDS = {
-  firstName: 'entry.1328606392',
-  email: 'entry.1362361142',
-  q1: 'entry.1002851429',
-  q2: 'entry.158149559',
-  q3: 'entry.197086545',
-  q4: 'entry.1995005739',
-  q5: 'entry.1392028128',
-  q6: 'entry.1044599284',
-  q7: 'entry.1358412920',
-  q8: 'entry.1064566425',
-  q9: 'entry.1128018511',
-  q10: 'entry.2007665370',
-  q11: 'entry.346723911',
-  q12: 'entry.1174770986',
-  q13: 'entry.502239037',
-  q14: 'entry.444849892',
-};
 
 function getAnswerForEntry(entryId) {
   return answers[entryId] || '';
 }
 
-/** Submit via form POST from browser — Google Forms accepts browser submissions, not server-side. */
-async function submitToGoogleForm() {
-  const fbzxRes = await fetch('/api/summit-readiness-fbzx').catch(() => ({ ok: false }));
-  const { fbzx } = fbzxRes.ok ? await fbzxRes.json() : { fbzx: '' };
+function submitToGoogleForm() {
+  const body = new URLSearchParams({
+    // Identity
+    'entry.1328606392': String(firstName || '').trim(), // First Name
+    'entry.1362361142': String(email || '').trim(),     // Email
+    // Domain 1
+    'entry.1002851429': getAnswerForEntry('entry.1002851429'),
+    'entry.158149559':  getAnswerForEntry('entry.158149559'),
+    // Domain 2
+    'entry.197086545':  getAnswerForEntry('entry.197086545'),
+    'entry.1995005739': getAnswerForEntry('entry.1995005739'),
+    // Domain 3
+    'entry.1392028128': getAnswerForEntry('entry.1392028128'),
+    'entry.1044599284': getAnswerForEntry('entry.1044599284'),
+    // Domain 4
+    'entry.1358412920': getAnswerForEntry('entry.1358412920'),
+    'entry.1064566425': getAnswerForEntry('entry.1064566425'),
+    // Domain 5
+    'entry.1128018511': getAnswerForEntry('entry.1128018511'),
+    'entry.2007665370': getAnswerForEntry('entry.2007665370'),
+    // Domain 6
+    'entry.346723911':  getAnswerForEntry('entry.346723911'),
+    'entry.1174770986': getAnswerForEntry('entry.1174770986'),
+    // Domain 7
+    'entry.502239037':  getAnswerForEntry('entry.502239037'),
+    'entry.444849892':  getAnswerForEntry('entry.444849892'),
+  });
 
-  const fields = {
-    fvv: '1',
-    'draftResponse': '[]',
-    pageHistory: '0,1,2,3,4,5,6,7,8',
-    fbzx: fbzx || String(Date.now()),
-    submit: 'Submit',
-    [ENTRY_IDS.firstName]: String(firstName || '').trim(),
-    [ENTRY_IDS.email]: String(email || '').trim(),
-    [ENTRY_IDS.q1]: getAnswerForEntry('entry.1002851429'),
-    [ENTRY_IDS.q2]: getAnswerForEntry('entry.158149559'),
-    [ENTRY_IDS.q3]: getAnswerForEntry('entry.197086545'),
-    [ENTRY_IDS.q4]: getAnswerForEntry('entry.1995005739'),
-    [ENTRY_IDS.q5]: getAnswerForEntry('entry.1392028128'),
-    [ENTRY_IDS.q6]: getAnswerForEntry('entry.1044599284'),
-    [ENTRY_IDS.q7]: getAnswerForEntry('entry.1358412920'),
-    [ENTRY_IDS.q8]: getAnswerForEntry('entry.1064566425'),
-    [ENTRY_IDS.q9]: getAnswerForEntry('entry.1128018511'),
-    [ENTRY_IDS.q10]: getAnswerForEntry('entry.2007665370'),
-    [ENTRY_IDS.q11]: getAnswerForEntry('entry.346723911'),
-    [ENTRY_IDS.q12]: getAnswerForEntry('entry.1174770986'),
-    [ENTRY_IDS.q13]: getAnswerForEntry('entry.502239037'),
-    [ENTRY_IDS.q14]: getAnswerForEntry('entry.444849892'),
-  };
-
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = FORM_SUBMIT_URL;
-  form.target = 'sr-form-target';
-  form.style.display = 'none';
-
-  let iframe = document.getElementById('sr-form-target');
-  if (!iframe) {
-    iframe = document.createElement('iframe');
-    iframe.name = 'sr-form-target';
-    iframe.id = 'sr-form-target';
-    iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
-    document.body.appendChild(iframe);
-  }
-
-  for (const [name, value] of Object.entries(fields)) {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
-  }
-
-  document.body.appendChild(form);
-  form.submit();
-  form.remove();
-
-  console.log('✅ Summit Readiness submitted (browser form POST)');
+  // Fire-and-forget — no-cors like SRS RBI. Google Forms records the submission.
+  fetch(SR_FORM_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    body,
+  }).catch(e => console.warn('[Summit Readiness] form submission warning:', e));
 }
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
