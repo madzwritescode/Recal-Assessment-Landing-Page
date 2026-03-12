@@ -626,39 +626,89 @@ function restart() {
 
 // ─── Google Form Submission ───────────────────────────────────────────────────
 
+const FORM_SUBMIT_URL =
+  'https://docs.google.com/forms/d/e/1FAIpQLSchaXGfiaO3ynpzwmy2keiSQGRKDsoZVqDyAOdztWyq_iVMAA/formResponse';
+
+const ENTRY_IDS = {
+  firstName: 'entry.1328606392',
+  email: 'entry.1362361142',
+  q1: 'entry.1002851429',
+  q2: 'entry.158149559',
+  q3: 'entry.197086545',
+  q4: 'entry.1995005739',
+  q5: 'entry.1392028128',
+  q6: 'entry.1044599284',
+  q7: 'entry.1358412920',
+  q8: 'entry.1064566425',
+  q9: 'entry.1128018511',
+  q10: 'entry.2007665370',
+  q11: 'entry.346723911',
+  q12: 'entry.1174770986',
+  q13: 'entry.502239037',
+  q14: 'entry.444849892',
+};
+
 function getAnswerForEntry(entryId) {
   return answers[entryId] || '';
 }
 
-function submitToGoogleForm() {
-  // Map answers to named keys the API route expects
-  const payload = {
-    firstName,
-    email,
-    q1:  getAnswerForEntry('entry.1002851429'),
-    q2:  getAnswerForEntry('entry.158149559'),
-    q3:  getAnswerForEntry('entry.197086545'),
-    q4:  getAnswerForEntry('entry.1995005739'),
-    q5:  getAnswerForEntry('entry.1392028128'),
-    q6:  getAnswerForEntry('entry.1044599284'),
-    q7:  getAnswerForEntry('entry.1358412920'),
-    q8:  getAnswerForEntry('entry.1064566425'),
-    q9:  getAnswerForEntry('entry.1128018511'),
-    q10: getAnswerForEntry('entry.2007665370'),
-    q11: getAnswerForEntry('entry.346723911'),
-    q12: getAnswerForEntry('entry.1174770986'),
-    q13: getAnswerForEntry('entry.502239037'),
-    q14: getAnswerForEntry('entry.444849892'),
+/** Submit via form POST from browser — Google Forms accepts browser submissions, not server-side. */
+async function submitToGoogleForm() {
+  const fbzxRes = await fetch('/api/summit-readiness-fbzx').catch(() => ({ ok: false }));
+  const { fbzx } = fbzxRes.ok ? await fbzxRes.json() : { fbzx: '' };
+
+  const fields = {
+    fvv: '1',
+    'draftResponse': '[]',
+    pageHistory: '0,1,2,3,4,5,6,7,8',
+    fbzx: fbzx || String(Date.now()),
+    submit: 'Submit',
+    [ENTRY_IDS.firstName]: String(firstName || '').trim(),
+    [ENTRY_IDS.email]: String(email || '').trim(),
+    [ENTRY_IDS.q1]: getAnswerForEntry('entry.1002851429'),
+    [ENTRY_IDS.q2]: getAnswerForEntry('entry.158149559'),
+    [ENTRY_IDS.q3]: getAnswerForEntry('entry.197086545'),
+    [ENTRY_IDS.q4]: getAnswerForEntry('entry.1995005739'),
+    [ENTRY_IDS.q5]: getAnswerForEntry('entry.1392028128'),
+    [ENTRY_IDS.q6]: getAnswerForEntry('entry.1044599284'),
+    [ENTRY_IDS.q7]: getAnswerForEntry('entry.1358412920'),
+    [ENTRY_IDS.q8]: getAnswerForEntry('entry.1064566425'),
+    [ENTRY_IDS.q9]: getAnswerForEntry('entry.1128018511'),
+    [ENTRY_IDS.q10]: getAnswerForEntry('entry.2007665370'),
+    [ENTRY_IDS.q11]: getAnswerForEntry('entry.346723911'),
+    [ENTRY_IDS.q12]: getAnswerForEntry('entry.1174770986'),
+    [ENTRY_IDS.q13]: getAnswerForEntry('entry.502239037'),
+    [ENTRY_IDS.q14]: getAnswerForEntry('entry.444849892'),
   };
 
-  fetch('/api/submit-summit-readiness', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-    .then(res => res.ok ? res.json() : Promise.reject(res.status))
-    .then(() => console.log('✅ Summit Readiness submitted'))
-    .catch(err => console.warn('Form submission error:', err));
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = FORM_SUBMIT_URL;
+  form.target = 'sr-form-target';
+  form.style.display = 'none';
+
+  let iframe = document.getElementById('sr-form-target');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.name = 'sr-form-target';
+    iframe.id = 'sr-form-target';
+    iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
+    document.body.appendChild(iframe);
+  }
+
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+
+  document.body.appendChild(form);
+  form.submit();
+  form.remove();
+
+  console.log('✅ Summit Readiness submitted (browser form POST)');
 }
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
