@@ -137,29 +137,42 @@ document.addEventListener('DOMContentLoaded', function () {
     //  11-week  → m2Week = 7
     // ==========================================
 
-    const rawWeeks   = Math.floor(daysUntilExpedition / 7);
-    const totalWeeks = Math.max(5, rawWeeks);
-    const isCram     = rawWeeks < 5;
+    const rawWeeks = Math.floor(daysUntilExpedition / 7);
+    const isCram   = rawWeeks < 5;
 
-    // M2 starts at week (totalWeeks - 4); minimum week 2
-    const m2WeekNumber = Math.max(2, totalWeeks - 4);
+    // =====================================================
+    // OVER-16 LOGIC
+    // If the user is more than 16 weeks out, we split the
+    // timeline into two phases:
+    //   Phase A: Week 1 now (Module U)
+    //   Bridge:  Nasal breathing maintenance until E-16
+    //   Phase B: Full 16-week plan starting at E-16
+    // =====================================================
+    const isOver16 = rawWeeks > 16;
 
-    // Taper ALWAYS anchors backward from expedition — the final 7 days before departure
+    // The plan that actually runs is always capped at 16 (max) or min 5
+    const planWeeks    = Math.min(16, Math.max(5, rawWeeks));
+    const m2WeekNumber = Math.max(2, planWeeks - 4);
+
+    // For over-16: Phase B starts exactly 16 weeks before expedition
+    const planStart = isOver16
+      ? (() => { const d = new Date(expeditionDate); d.setDate(d.getDate() - planWeeks * 7); return d; })()
+      : new Date(trainingStart);
+
+    // Taper anchors backward from expedition — the final 7 days before departure
     const taperDate = new Date(expeditionDate);
     taperDate.setDate(taperDate.getDate() - 7);
 
-    // Week date: forward from trainingStart for all weeks except the taper week,
-    // which always uses the backward-anchored taperDate
-    function weekDate(w) {
-      if (w === totalWeeks) return new Date(taperDate);
-      const d = new Date(trainingStart);
+    function planWeekDate(w) {
+      if (w === planWeeks) return new Date(taperDate);
+      const d = new Date(planStart);
       d.setDate(d.getDate() + (w - 1) * 7);
       return d;
     }
 
     // Check whether there's a gap between the end of the "Finish M+M2" week
     // and when the taper week actually starts (remainder days = 0–6)
-    const finishWeekEnd = weekDate(totalWeeks - 1);
+    const finishWeekEnd = planWeekDate(planWeeks - 1);
     finishWeekEnd.setDate(finishWeekEnd.getDate() + 7);
     const bufferDays = Math.round((taperDate - finishWeekEnd) / (1000 * 60 * 60 * 24));
 
@@ -167,8 +180,13 @@ document.addEventListener('DOMContentLoaded', function () {
     // VERSION HEADER
     // ==========================================
     const versionHeader = document.getElementById('version-header');
-    versionHeader.textContent =
-      `According to your Expedition Date, your timeline is best for the ${totalWeeks}-Week version of the training.`;
+    if (isOver16) {
+      versionHeader.textContent =
+        `You are more than 16 weeks out. Your full 16-Week Plan begins on ${formatDate(planStart)}. Start Module U now and focus on nasal breathing until then.`;
+    } else {
+      versionHeader.textContent =
+        `According to your Expedition Date, your timeline is best for the ${planWeeks}-Week version of the training.`;
+    }
 
     const warningBanner = document.getElementById('warning-banner');
     if (isCram) {
@@ -190,101 +208,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const phaseDiv = document.createElement('div');
     phaseDiv.className = 'timeline-phase';
 
-    for (let w = 1; w <= totalWeeks; w++) {
-      const date = weekDate(w);
-      let subtitle    = '';
-      let markerClass = '';
-      let activities  = [];
-
-      // ---- WEEK 1: Assessment + Module U ----
-      if (w === 1) {
-        subtitle    = 'Assessment & Begin Module U';
-        markerClass = 'week1';
-        activities  = [
-          { label: 'Take Assessment', detail: 'Recal Breath Index (RBI)', isSendoff: false },
-          { label: 'Start',           detail: 'Module U — Unlearn Bad Habits', isSendoff: false }
-        ];
-
-      // ---- WEEK 2 (6-week plan): M + M2 + I all start together ----
-      } else if (w === 2 && m2WeekNumber === 2) {
-        subtitle    = 'Begin Modules M + M2 — Muscle & Mountain Simulation';
-        markerClass = 'week-m2';
-        activities  = [
-          { label: 'Start',    detail: 'Module M — Muscle Strength', isSendoff: false },
-          { label: 'Start',    detail: 'Module M2 — Mountain Simulation', isSendoff: false },
-          { label: 'Includes', detail: 'Respiratory Muscle Training, Lung Capacity Development, and High Altitude Simulation breathwork protocols', isSendoff: false },
-          { label: 'Read',     detail: 'Module I — Integrate', isSendoff: false }
-        ];
-
-      // ---- WEEK 2 (7+ week plans): M + I only ----
-      } else if (w === 2) {
-        subtitle    = 'Begin Module M — Muscle Strength';
-        markerClass = 'week-m';
-        activities  = [
-          { label: 'Start',    detail: 'Module M — Muscle Strength', isSendoff: false },
-          { label: 'Includes', detail: 'Respiratory Muscle Training and Lung Capacity Development protocols', isSendoff: false },
-          { label: 'Read',     detail: 'Module I — Integrate', isSendoff: false }
-        ];
-
-      // ---- WEEKS 3 to m2WeekNumber-1: Continue M only ----
-      } else if (w > 2 && w < m2WeekNumber) {
-        subtitle    = 'Continue Module M';
-        markerClass = 'week-m';
-        activities  = [
-          { label: 'Continue', detail: 'Module M', isSendoff: false }
-        ];
-
-      // ---- M2 START WEEK (7+ week plans only) ----
-      } else if (w === m2WeekNumber && m2WeekNumber > 2) {
-        subtitle    = 'Begin Module M2 — Mountain Simulation';
-        markerClass = 'week-m2';
-        activities  = [
-          { label: 'Start',    detail: 'Module M2 — Mountain Simulation', isSendoff: false },
-          { label: 'Includes', detail: 'High Altitude Simulation breathwork protocols', isSendoff: false },
-          { label: 'Continue', detail: 'Module M', isSendoff: false }
-        ];
-
-      // ---- WEEKS m2WeekNumber+1 to totalWeeks-2: Continue M + M2 ----
-      } else if (w > m2WeekNumber && w < totalWeeks - 1) {
-        subtitle    = 'Continue Modules M + M2';
-        markerClass = 'week-m';
-        activities  = [
-          { label: 'Continue', detail: 'Modules M + M2', isSendoff: false }
-        ];
-
-      // ---- WEEK totalWeeks-1: Finish M + M2 ----
-      } else if (w === totalWeeks - 1) {
-        subtitle    = 'Finish Modules M + M2';
-        markerClass = 'week-m';
-        activities  = [
-          { label: 'Finish', detail: 'Modules M + M2', isSendoff: false }
-        ];
-        // If there are leftover days before taper, prompt the user to keep going
-        if (bufferDays > 0) {
-          activities.push({
-            label: 'Continue',
-            detail: `Modules M + M2 until your Taper Week begins on ${formatDate(taperDate)}`,
-            isSendoff: false
-          });
-        }
-
-      // ---- WEEK totalWeeks: Taper + Final Assessment + Send-off ----
-      } else if (w === totalWeeks) {
-        subtitle    = 'Taper & Final Assessment';
-        markerClass = 'week-taper';
-        activities  = [
-          { label: 'Start',           detail: 'Module T — Taper', isSendoff: false },
-          { label: 'Take Assessment', detail: 'Recal Breath Index (RBI)', isSendoff: false },
-          { label: 'Send-off',        detail: 'Get your Expedition Breathing Playbook — Good luck on your climb! 🏔️', isSendoff: true }
-        ];
-      }
-
-      // Store for CSV
+    // ---- HELPER: render and append a single week row ----
+    function appendWeekRow(weekLabel, date, subtitle, markerClass, activities) {
       activities.forEach(({ label, detail }) => {
-        csvRows.push([`Week ${w}`, formatDate(date), label, detail]);
+        csvRows.push([weekLabel, formatDate(date), label, detail]);
       });
 
-      // Render week item
       const activitiesHTML = activities.map(({ label, detail, isSendoff }) => `
         <div class="activity-item${isSendoff ? ' send-off' : ''}">
           <span class="activity-label">${label}:</span>
@@ -297,13 +226,183 @@ document.addEventListener('DOMContentLoaded', function () {
       item.innerHTML = `
         <div class="timeline-marker ${markerClass}"></div>
         <div class="timeline-content">
-          <div class="timeline-title">Week ${w}</div>
+          <div class="timeline-title">${weekLabel}</div>
           <div class="timeline-date">${formatDate(date)}</div>
           <div class="week-subtitle">${subtitle}</div>
           <div class="week-activities">${activitiesHTML}</div>
         </div>
       `;
       phaseDiv.appendChild(item);
+    }
+
+    if (isOver16) {
+      // ---- Phase A: Week 1 now ----
+      appendWeekRow('Week 1', trainingStart,
+        'Assessment & Begin Module U',
+        'week1',
+        [
+          { label: 'Take Assessment', detail: 'Recal Breath Index (RBI)', isSendoff: false },
+          { label: 'Start',           detail: 'Module U — Unlearn Bad Habits', isSendoff: false }
+        ]
+      );
+
+      // ---- Bridge: Nasal breathing maintenance ----
+      appendWeekRow('Now → ' + formatDate(planStart), trainingStart,
+        'Nasal Breathing Maintenance Phase',
+        'week-m',
+        [
+          {
+            label: 'Focus',
+            detail: 'Focus on nasal breathing during your regular training and workouts until your 16-Week Plan begins on ' + formatDate(planStart),
+            isSendoff: false
+          }
+        ]
+      );
+
+      // ---- Phase B: Full 16-week plan ----
+      for (let w = 1; w <= planWeeks; w++) {
+        const date = planWeekDate(w);
+        let subtitle    = '';
+        let markerClass = '';
+        let activities  = [];
+
+        if (w === 1) {
+          subtitle    = 'Assessment & Begin Module U';
+          markerClass = 'week1';
+          activities  = [
+            { label: 'Take Assessment', detail: 'Recal Breath Index (RBI)', isSendoff: false },
+            { label: 'Start',           detail: 'Module U — Unlearn Bad Habits', isSendoff: false }
+          ];
+        } else if (w === 2 && m2WeekNumber === 2) {
+          subtitle    = 'Begin Modules M + M2 — Muscle & Mountain Simulation';
+          markerClass = 'week-m2';
+          activities  = [
+            { label: 'Start',    detail: 'Module M — Muscle Strength', isSendoff: false },
+            { label: 'Start',    detail: 'Module M2 — Mountain Simulation', isSendoff: false },
+            { label: 'Includes', detail: 'Respiratory Muscle Training, Lung Capacity Development, and High Altitude Simulation breathwork protocols', isSendoff: false },
+            { label: 'Read',     detail: 'Module I — Integrate', isSendoff: false }
+          ];
+        } else if (w === 2) {
+          subtitle    = 'Begin Module M — Muscle Strength';
+          markerClass = 'week-m';
+          activities  = [
+            { label: 'Start',    detail: 'Module M — Muscle Strength', isSendoff: false },
+            { label: 'Includes', detail: 'Respiratory Muscle Training and Lung Capacity Development protocols', isSendoff: false },
+            { label: 'Read',     detail: 'Module I — Integrate', isSendoff: false }
+          ];
+        } else if (w > 2 && w < m2WeekNumber) {
+          subtitle    = 'Continue Module M';
+          markerClass = 'week-m';
+          activities  = [{ label: 'Continue', detail: 'Module M', isSendoff: false }];
+        } else if (w === m2WeekNumber && m2WeekNumber > 2) {
+          subtitle    = 'Begin Module M2 — Mountain Simulation';
+          markerClass = 'week-m2';
+          activities  = [
+            { label: 'Start',    detail: 'Module M2 — Mountain Simulation', isSendoff: false },
+            { label: 'Includes', detail: 'High Altitude Simulation breathwork protocols', isSendoff: false },
+            { label: 'Continue', detail: 'Module M', isSendoff: false }
+          ];
+        } else if (w > m2WeekNumber && w < planWeeks - 1) {
+          subtitle    = 'Continue Modules M + M2';
+          markerClass = 'week-m';
+          activities  = [{ label: 'Continue', detail: 'Modules M + M2', isSendoff: false }];
+        } else if (w === planWeeks - 1) {
+          subtitle    = 'Finish Modules M + M2';
+          markerClass = 'week-m';
+          activities  = [{ label: 'Finish', detail: 'Modules M + M2', isSendoff: false }];
+          if (bufferDays > 0) {
+            activities.push({
+              label: 'Continue',
+              detail: `Modules M + M2 until your Taper Week begins on ${formatDate(taperDate)}`,
+              isSendoff: false
+            });
+          }
+        } else if (w === planWeeks) {
+          subtitle    = 'Taper & Final Assessment';
+          markerClass = 'week-taper';
+          activities  = [
+            { label: 'Start',           detail: 'Module T — Taper', isSendoff: false },
+            { label: 'Take Assessment', detail: 'Recal Breath Index (RBI)', isSendoff: false },
+            { label: 'Send-off',        detail: 'Get your Expedition Breathing Playbook — Good luck on your climb! 🏔️', isSendoff: true }
+          ];
+        }
+
+        appendWeekRow(`Plan Week ${w}`, date, subtitle, markerClass, activities);
+      }
+
+    } else {
+      // ==========================================
+      // STANDARD PATH (≤ 16 weeks) — original logic
+      // ==========================================
+      for (let w = 1; w <= planWeeks; w++) {
+        const date = planWeekDate(w);
+        let subtitle    = '';
+        let markerClass = '';
+        let activities  = [];
+
+        if (w === 1) {
+          subtitle    = 'Assessment & Begin Module U';
+          markerClass = 'week1';
+          activities  = [
+            { label: 'Take Assessment', detail: 'Recal Breath Index (RBI)', isSendoff: false },
+            { label: 'Start',           detail: 'Module U — Unlearn Bad Habits', isSendoff: false }
+          ];
+        } else if (w === 2 && m2WeekNumber === 2) {
+          subtitle    = 'Begin Modules M + M2 — Muscle & Mountain Simulation';
+          markerClass = 'week-m2';
+          activities  = [
+            { label: 'Start',    detail: 'Module M — Muscle Strength', isSendoff: false },
+            { label: 'Start',    detail: 'Module M2 — Mountain Simulation', isSendoff: false },
+            { label: 'Includes', detail: 'Respiratory Muscle Training, Lung Capacity Development, and High Altitude Simulation breathwork protocols', isSendoff: false },
+            { label: 'Read',     detail: 'Module I — Integrate', isSendoff: false }
+          ];
+        } else if (w === 2) {
+          subtitle    = 'Begin Module M — Muscle Strength';
+          markerClass = 'week-m';
+          activities  = [
+            { label: 'Start',    detail: 'Module M — Muscle Strength', isSendoff: false },
+            { label: 'Includes', detail: 'Respiratory Muscle Training and Lung Capacity Development protocols', isSendoff: false },
+            { label: 'Read',     detail: 'Module I — Integrate', isSendoff: false }
+          ];
+        } else if (w > 2 && w < m2WeekNumber) {
+          subtitle    = 'Continue Module M';
+          markerClass = 'week-m';
+          activities  = [{ label: 'Continue', detail: 'Module M', isSendoff: false }];
+        } else if (w === m2WeekNumber && m2WeekNumber > 2) {
+          subtitle    = 'Begin Module M2 — Mountain Simulation';
+          markerClass = 'week-m2';
+          activities  = [
+            { label: 'Start',    detail: 'Module M2 — Mountain Simulation', isSendoff: false },
+            { label: 'Includes', detail: 'High Altitude Simulation breathwork protocols', isSendoff: false },
+            { label: 'Continue', detail: 'Module M', isSendoff: false }
+          ];
+        } else if (w > m2WeekNumber && w < planWeeks - 1) {
+          subtitle    = 'Continue Modules M + M2';
+          markerClass = 'week-m';
+          activities  = [{ label: 'Continue', detail: 'Modules M + M2', isSendoff: false }];
+        } else if (w === planWeeks - 1) {
+          subtitle    = 'Finish Modules M + M2';
+          markerClass = 'week-m';
+          activities  = [{ label: 'Finish', detail: 'Modules M + M2', isSendoff: false }];
+          if (bufferDays > 0) {
+            activities.push({
+              label: 'Continue',
+              detail: `Modules M + M2 until your Taper Week begins on ${formatDate(taperDate)}`,
+              isSendoff: false
+            });
+          }
+        } else if (w === planWeeks) {
+          subtitle    = 'Taper & Final Assessment';
+          markerClass = 'week-taper';
+          activities  = [
+            { label: 'Start',           detail: 'Module T — Taper', isSendoff: false },
+            { label: 'Take Assessment', detail: 'Recal Breath Index (RBI)', isSendoff: false },
+            { label: 'Send-off',        detail: 'Get your Expedition Breathing Playbook — Good luck on your climb! 🏔️', isSendoff: true }
+          ];
+        }
+
+        appendWeekRow(`Week ${w}`, date, subtitle, markerClass, activities);
+      }
     }
 
     timelineContainer.appendChild(phaseDiv);
@@ -317,12 +416,13 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('expedition-date').textContent     = formatDate(expeditionDate);
     document.getElementById('selected-mountain').textContent   = mountain;
 
-    // Update workbook CTA button for this specific week version
-    moreInfoBtn.innerHTML = `<span class="btn-icon">📥</span> Download Your ${totalWeeks}-Week Training Workbook`;
-    moreInfoBtn.dataset.workbookUrl = getWorkbookUrl(totalWeeks);
+    // Workbook CTA always uses 16-week (or the actual planWeeks if ≤16)
+    const workbookWeeks = Math.min(16, planWeeks);
+    moreInfoBtn.innerHTML = `<span class="btn-icon">📥</span> Download Your ${workbookWeeks}-Week Training Workbook`;
+    moreInfoBtn.dataset.workbookUrl = getWorkbookUrl(workbookWeeks);
 
     // Silent background submission — fires before results are shown
-    submitTimelineData(email, trainingStart, expeditionDate, totalWeeks);
+    submitTimelineData(email, trainingStart, expeditionDate, workbookWeeks);
 
     // Show results
     const resultsDiv = document.getElementById('results');
