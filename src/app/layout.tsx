@@ -26,6 +26,27 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <Script
+          id="affiliate-manager"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                var t = document.createElement("script");
+                t.type = "text/javascript", t.async = !0, t.src = 'https://link.msgsndr.com/js/am.js', t.onload = t.onreadystatechange = function() {
+                  var t = this.readyState;
+                  if (!t || "complete" == t || "loaded" == t) try {
+                    affiliateManager.init('dcxYZfbVVQ2mVgy68ts5', 'https://backend.leadconnectorhq.com', '.assessment.recal.training')
+                  } catch (t) {}
+                };
+                var e = document.getElementsByTagName("script")[0];
+                e.parentNode.insertBefore(t, e)
+              })();
+            `,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
