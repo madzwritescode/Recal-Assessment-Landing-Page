@@ -45,7 +45,6 @@ export async function GET() {
     
     const emailHeader = process.env.GOOGLE_RBI_EMAIL_HEADER || 'Email Address';
     const scoreHeader = process.env.GOOGLE_RBI_SCORE_HEADER || 'Calculated Summit-Ready Score';
-    const badgeHeader = process.env.GOOGLE_RBI_BADGE_HEADER || 'Calculated Badge';
 
     if (!clientEmail || !privateKey || !sheetId) {
       console.error('Missing required environment variables for Google Sheets integration');
@@ -90,7 +89,6 @@ export async function GET() {
     const lastNameIdx = findColumnIndex(header, ['Last Name', 'LastName']);
     const emailIdx = findColumnIndex(header, [emailHeader, 'Email Address', 'Email']);
     const scoreIdx = findColumnIndex(header, [scoreHeader, 'Score', 'Total Score']);
-    const badgeIdx = findColumnIndex(header, [badgeHeader, 'Calculated Badge', 'Badge']);
     const goalTypeIdx = findColumnIndex(header, ['Goal Type', 'GoalType', 'Goal']);
     const goalDetailIdx = findColumnIndex(header, ['Goal Detail', 'GoalDetail']);
 
@@ -130,7 +128,22 @@ export async function GET() {
       const timestamp = timestampIdx >= 0 ? row[timestampIdx] ?? '' : '';
       const firstName = firstNameIdx >= 0 ? row[firstNameIdx] ?? '' : '';
       const lastName = lastNameIdx >= 0 ? row[lastNameIdx] ?? '' : '';
-      const badge = badgeIdx >= 0 ? row[badgeIdx] ?? 'Summit-Ready' : 'Summit-Ready';
+      
+      // Dynamically calculate the proper V2 badge based on the total score
+      let badge = 'Summit-Ready';
+      if (score >= 93) {
+        badge = 'Everest-Ready';
+      } else if (score >= 80) {
+        badge = 'Summit-Ready';
+      } else if (score >= 65) {
+        badge = 'Summit-Approaching';
+      } else if (score >= 50) {
+        badge = 'Acclimatizing';
+      } else if (score >= 31) {
+        badge = 'Altitude Apprentice';
+      } else {
+        badge = 'Base Camp Beginner';
+      }
 
       const gType = goalTypeIdx >= 0 ? row[goalTypeIdx] ?? '' : '';
       const gDetail = goalDetailIdx >= 0 ? row[goalDetailIdx] ?? '' : '';
@@ -152,11 +165,32 @@ export async function GET() {
       });
     }
 
-    // Get current calendar month and year info
+    // Get the most recent month represented in the sheet's data
     const now = new Date();
-    const currentMonth = now.getMonth(); // 0-11
-    const currentYear = now.getFullYear();
-    const currentMonthName = now.toLocaleString('en-US', { month: 'long' });
+    let targetMonth = now.getMonth(); // 0-11
+    let targetYear = now.getFullYear();
+    let currentMonthName = now.toLocaleString('en-US', { month: 'long' });
+
+    let mostRecentTime = 0;
+    parsedEntries.forEach((entry) => {
+      const entryDate = new Date(entry.timestamp);
+      const time = entryDate.getTime();
+      if (!isNaN(time) && time > mostRecentTime) {
+        mostRecentTime = time;
+      }
+    });
+
+    if (mostRecentTime > 0) {
+      const mostRecentDate = new Date(mostRecentTime);
+      targetMonth = mostRecentDate.getMonth();
+      targetYear = mostRecentDate.getFullYear();
+      
+      const monthLabel = mostRecentDate.toLocaleString('en-US', { month: 'long' });
+      // If it's a different year, append the year (e.g. September 2025)
+      currentMonthName = targetYear !== now.getFullYear() 
+        ? `${monthLabel} ${targetYear}` 
+        : monthLabel;
+    }
 
     // Maps to group by unique attendee (by email) and keep only their HIGHEST score
     const allTimeMap = new Map<string, LeaderboardEntry>();
@@ -169,10 +203,10 @@ export async function GET() {
         allTimeMap.set(entry.email, entry);
       }
 
-      // 2. This month highest score grouping
+      // 2. This month highest score grouping (targeting the dynamically detected month)
       const entryDate = new Date(entry.timestamp);
       if (!isNaN(entryDate.getTime())) {
-        const isThisMonth = entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear;
+        const isThisMonth = entryDate.getMonth() === targetMonth && entryDate.getFullYear() === targetYear;
         if (isThisMonth) {
           const existingMonthly = monthlyMap.get(entry.email);
           if (!existingMonthly || entry.score > existingMonthly.score) {

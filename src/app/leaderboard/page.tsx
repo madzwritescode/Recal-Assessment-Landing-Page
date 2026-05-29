@@ -75,12 +75,12 @@ export default function LeaderboardPage() {
 
   return (
     <>
-      <div className={`min-h-screen ${isEmbedded ? "bg-[#040D1A]" : "bg-slate-50"} text-slate-100 flex flex-col font-sans transition-colors duration-300`}>
+      <div className="min-h-screen bg-[#040D1A] text-slate-100 flex flex-col font-sans transition-colors duration-300">
         
         {/* GLOBAL EMBEDDING STYLES OVERRIDE */}
         <style jsx global>{`
           body {
-            background-color: ${isEmbedded ? "#040D1A" : "#f8fafc"} !important;
+            background-color: #040D1A !important;
             overflow-x: hidden;
           }
         `}</style>
@@ -108,41 +108,40 @@ export default function LeaderboardPage() {
             
             {/* ── HEADER BANNER ── */}
             <div className="text-center space-y-3">
-              <p className="text-xs uppercase tracking-[0.3em] font-semibold text-[#4A90A4]">
+              <p className="text-xs uppercase tracking-[0.3em] font-extrabold text-[#4A90A4]">
                 Recal Breath Index
               </p>
               <h1 
-                className="text-4xl md:text-5xl font-extrabold tracking-tight italic"
+                className="text-4xl md:text-5xl font-extrabold tracking-tight italic text-white"
                 style={{ 
-                  color: isEmbedded ? "#ffffff" : "#0A4367", 
                   fontFamily: "Rogue Sans Ext, sans-serif" 
                 }}
               >
                 🏆 ATHLETE LEADERBOARD
               </h1>
-              <p className="text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
+              <p className="text-sm font-semibold text-slate-300 max-w-lg mx-auto leading-relaxed">
                 Celebrating the top oxygen-efficient climbers. Your Breath Index (RBI) determines your score.
               </p>
             </div>
 
             {/* ── DUAL TAB TOGGLE CONTROL ── */}
-            <div className="relative z-10 p-1.5 rounded-full flex bg-[#0A4367]/40 border border-[#A2C2C7]/20 backdrop-blur-lg shadow-inner max-w-sm w-full mx-auto">
+            <div className="relative z-10 p-1.5 rounded-full flex bg-[#06152B] border border-[#A2C2C7]/30 shadow-inner max-w-sm w-full mx-auto">
               <button
                 onClick={() => setActiveTab("thisMonth")}
-                className={`flex-1 py-2 text-xs md:text-sm font-semibold rounded-full tracking-wide transition-all duration-300 cursor-pointer ${
+                className={`flex-1 py-2.5 text-xs md:text-sm font-extrabold rounded-full tracking-wide transition-all duration-300 cursor-pointer ${
                   activeTab === "thisMonth"
-                    ? "bg-[#0A4367] text-white shadow-md border border-[#A2C2C7]/30"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-[#0A4367] text-white shadow-[0_0_12px_rgba(162,194,199,0.3)] border border-[#A2C2C7]/50"
+                    : "text-[#A2C2C7]/80 hover:text-white hover:bg-white/5"
                 }`}
               >
                 📅 {currentMonthName}
               </button>
               <button
                 onClick={() => setActiveTab("allTime")}
-                className={`flex-1 py-2 text-xs md:text-sm font-semibold rounded-full tracking-wide transition-all duration-300 cursor-pointer ${
+                className={`flex-1 py-2.5 text-xs md:text-sm font-extrabold rounded-full tracking-wide transition-all duration-300 cursor-pointer ${
                   activeTab === "allTime"
-                    ? "bg-[#0A4367] text-white shadow-md border border-[#A2C2C7]/30"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-[#0A4367] text-white shadow-[0_0_12px_rgba(162,194,199,0.3)] border border-[#A2C2C7]/50"
+                    : "text-[#A2C2C7]/80 hover:text-white hover:bg-white/5"
                 }`}
               >
                 🌎 All-Time Legends
