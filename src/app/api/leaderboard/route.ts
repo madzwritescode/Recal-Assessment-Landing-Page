@@ -41,7 +41,11 @@ export async function GET() {
     const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
     const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
     const sheetId = process.env.GOOGLE_SHEET_ID;
-    const dataRange = process.env.GOOGLE_RBI_RESULTS_RANGE || 'Form Responses 2!A:Z';
+    let dataRange = process.env.GOOGLE_RBI_RESULTS_RANGE || 'Form Responses 2!A:Z';
+    // Self-heal override: If Vercel Dashboard env still sends the old Form Responses 1, force Form Responses 2!A:Z
+    if (dataRange.includes('Form Responses 1')) {
+      dataRange = 'Form Responses 2!A:Z';
+    }
     
     const emailHeader = process.env.GOOGLE_RBI_EMAIL_HEADER || 'Email Address';
     const scoreHeader = process.env.GOOGLE_RBI_SCORE_HEADER || 'Calculated Summit-Ready Score';
