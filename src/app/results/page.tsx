@@ -1,44 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 
-// Helper function to calculate next Tuesday's date dynamically
-function getNextWebinarDate() {
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0: Sun, 1: Mon, 2: Tue, etc.
-  const currentHour = now.getHours();
-  
-  const targetDate = new Date();
-  
-  let daysToAdd = 0;
-  if (dayOfWeek === 2 && currentHour < 19) {
-    daysToAdd = 0;
-  } else {
-    daysToAdd = (2 - dayOfWeek + 7) % 7;
-    if (daysToAdd === 0) daysToAdd = 7;
-  }
-  
-  targetDate.setDate(now.getDate() + daysToAdd);
-  targetDate.setHours(19, 0, 0, 0); // 7:00 PM EST
-  
-  const options: Intl.DateTimeFormatOptions = {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  };
-  const dateStr = targetDate.toLocaleDateString('en-US', options);
-  
-  const day = targetDate.getDate();
-  let suffix = 'th';
-  if (day === 1 || day === 21 || day === 31) suffix = 'st';
-  else if (day === 2 || day === 22) suffix = 'nd';
-  else if (day === 3 || day === 23) suffix = 'rd';
-  
-  return `${dateStr.replace(/\d+/, day + suffix)} at 7:00 PM EST (4:00 PM PST)`;
-}
+
 
 function LoadingResults() {
   return (
@@ -59,39 +26,30 @@ function ResultsContent() {
   const grade = searchParams.get("grade") || "B";
   const badge = searchParams.get("badge") || "Functional Breather";
   
-  const [webinarDate, setWebinarDate] = useState("Tuesday at 7:00 PM EST");
 
-  useEffect(() => {
-    setWebinarDate(getNextWebinarDate());
-  }, []);
 
   // Determine custom text descriptions based on Badge
   let badgeDescription = "";
   let badgeImplication = "";
-  let badgeAction = "";
   let badgeColor = "#A2C2C7"; // default light ice-blue
 
   if (badge.toLowerCase().includes("summit") && !badge.toLowerCase().includes("approaching")) {
     badgeDescription = "Summit-Ready";
     badgeColor = "#4A90A4"; // solid brand blue
     badgeImplication = "Excellent breath control and carbon dioxide tolerance. Your respiratory muscles are well-conditioned, which means you will use oxygen efficiently at altitude and suffer less early-stage exhaustion.";
-    badgeAction = "Maintain your physical edge. Introduce advanced hypercapnic-hypoxic training drills (breath-holding under load) to prepare your body for sudden extreme ascents.";
   } else if (badge.toLowerCase().includes("everest") || badge.toLowerCase().includes("elite")) {
     badgeDescription = "Everest-Ready";
     badgeColor = "#F59E0B"; // Gold
     badgeImplication = "Exceptional, elite-level breathing tolerance. You possess superior carbon dioxide buffering capacity, showing minimal ventilation sensitivity, which is vital for extreme high altitude (above 18,000 ft) survival and climbing economy.";
-    badgeAction = "Taper your breathing drills closer to your expedition. Focus on high-altitude recovery techniques and breath regulation during severe cold stress.";
   } else if (badge.toLowerCase().includes("approaching")) {
     badgeDescription = "Summit Approaching";
     badgeColor = "#E11D48"; // Rose/Red
     badgeImplication = "Your BOLT score and CO₂ tolerance indicate a highly sensitive respiratory system. At high altitude, this will trigger rapid hyperventilation, a spike in heart rate, and premature fatigue due to oxygen dumping.";
-    badgeAction = "Begin core breathing adaptations immediately. Focus on nasal-only breathing during daily routines, and practice 5-10 minutes of diaphragmatic breathing twice a day.";
   } else {
     // Functional Breather / Intermediate
     badgeDescription = "Functional Breather";
     badgeColor = "#10B981"; // Emerald green
     badgeImplication = "Good foundation, but there is significant room to optimize. Your sensitivity to carbon dioxide is moderate, meaning you will feel the urge to breathe heavily relatively early under physical exertion at altitude.";
-    badgeAction = "Increase your BOLT threshold. Focus on incorporating light, nasal-only breath-hold pacing during your Zone 2 aerobic base training to lower your ventilator sensitivity.";
   }
 
   return (
@@ -209,20 +167,15 @@ function ResultsContent() {
             </div>
           </div>
         </div>
-
-        {/* 📋 TRAINING IMPLICATIONS SECTION 📋 */}
-        <div className="p-6 md:p-8 rounded-2xl border border-white/5 bg-[#050c16]/30 space-y-6">
-          <h3 className="text-xl font-bold text-white tracking-wide border-b border-white/10 pb-3 flex items-center gap-2">
-            🏔️ Coach Anthony's Training Recommendation
-          </h3>
-          <div className="space-y-4 text-slate-300 text-sm md:text-base leading-relaxed">
-            <p className="bg-white/5 border border-white/5 p-4 rounded-xl italic text-slate-300">
-              <strong>Recommended Action:</strong> {badgeAction}
-            </p>
-            <p>
-              To climb safely and perform at your peak at high altitudes, your body must be adapted to handle carbon dioxide build-up. Without targeted breath training, your body will over-respond to low oxygen levels, triggering hyperventilation, fatiguing your breathing muscles, and significantly increasing the risk of Acute Mountain Sickness (AMS).
-            </p>
-          </div>
+        {/* 📧 INBOX NOTICE CARD 📧 */}
+        <div className="p-6 md:p-8 rounded-2xl border border-white/10 bg-[#06152B]/40 backdrop-blur-md shadow-2xl relative overflow-hidden text-center space-y-3">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#A2C2C7]/5 rounded-full blur-2xl pointer-events-none"></div>
+          <p className="text-xl font-bold text-white tracking-wide" style={{ fontFamily: "Rogue Sans Ext, sans-serif", fontStyle: "italic" }}>
+            Check your inbox for your complete breakdown of your results.
+          </p>
+          <p className="text-sm text-slate-300 max-w-lg mx-auto leading-relaxed">
+            Your detailed breath report, customized performance benchmarking, and custom protocols have been emailed to your registered address.
+          </p>
         </div>
 
         {/* 🎯 WEBINAR CALL-TO-ACTION (STUNNING DOUBLE CONTAINER) 🎯 */}
@@ -240,18 +193,14 @@ function ResultsContent() {
             
             {/* Card 1: Live Masterclass Signup */}
             <div className="relative p-6 md:p-8 rounded-2xl border border-white/10 bg-[#06152B]/40 flex flex-col justify-between hover:border-[#A2C2C7]/30 transition-all duration-300 shadow-xl overflow-hidden">
-              <div className="absolute top-0 right-0 bg-[#A2C2C7]/10 text-white text-[10px] tracking-widest font-black uppercase py-1 px-4 rounded-bl-xl border-l border-b border-white/5">
-                RECOMMENDED
-              </div>
-              
               <div className="space-y-4">
                 <span className="text-3xl">📡</span>
                 <div className="space-y-1">
                   <h4 className="text-lg font-black text-white tracking-tight">
-                    Live Breathing Masterclass
+                    Live Workshop
                   </h4>
                   <p className="text-xs text-[#A2C2C7] font-black uppercase tracking-wider">
-                    {webinarDate}
+                    June 23rd and 24th
                   </p>
                 </div>
                 <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
@@ -261,7 +210,7 @@ function ResultsContent() {
 
               <div className="pt-8">
                 <a 
-                  href="/webinar-registration-page.html" 
+                  href="https://launch.recal.training/live-webinar-registration" 
                   className="w-full text-center block py-3 rounded-lg font-black text-white bg-[#0A4367] hover:bg-[#105987] transition-all border border-[#A2C2C7]/30 shadow-md tracking-wider text-xs md:text-sm uppercase cursor-pointer hover:shadow-[#A2C2C7]/10"
                 >
                   Secure My Live Spot &rarr;
@@ -288,7 +237,7 @@ function ResultsContent() {
 
               <div className="pt-8">
                 <a 
-                  href="/evergreen-webinar-SOD.html" 
+                  href="https://launch.recal.training/evergreen-webinar-registration" 
                   className="w-full text-center block py-3 rounded-lg font-black text-slate-300 bg-white/5 hover:bg-white/10 hover:text-white transition-all border border-white/10 text-xs md:text-sm uppercase cursor-pointer"
                 >
                   Watch On-Demand Now &rarr;
