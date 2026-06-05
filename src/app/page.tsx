@@ -706,6 +706,7 @@ export default function Home() {
                       width={60}
                       height={60}
                       className="w-full h-full object-contain brightness-0 invert opacity-60 hover:opacity-100 transition-opacity duration-300"
+                      unoptimized
                     />
                   </div>
                 ))}
@@ -733,6 +734,7 @@ export default function Home() {
                       width={150}
                       height={150}
                       className="w-full h-full object-contain brightness-0 invert opacity-60 hover:opacity-100 transition-all duration-300"
+                      unoptimized
                     />
                   </div>
                 ))}
@@ -744,6 +746,7 @@ export default function Home() {
                       width={150}
                       height={150}
                       className="w-full h-full object-contain brightness-0 invert opacity-60 hover:opacity-100 transition-all duration-300"
+                      unoptimized
                     />
                   </div>
                 ))}
