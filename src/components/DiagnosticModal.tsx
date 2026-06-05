@@ -39,25 +39,6 @@ const brandNavy = "#0A4367";
 const modalSteps = 9;
 const totalTests = 6;
 const webhookUrl = process.env.NEXT_PUBLIC_DIAGNOSTIC_WEBHOOK_URL;
-const googleFormUrl =
-  process.env.NEXT_PUBLIC_GOOGLE_FORM_URL ||
-  "https://docs.google.com/forms/d/e/1FAIpQLSfdvHwTAuYDUZrqKntNaIcZbNM_RPothRiZgcMbwFPeb8Mx0A/formResponse";
-
-const googleEntryIds = {
-  firstName: "entry.1328606392",
-  lastName: "entry.343152274",
-  email: "entry.1362361142",
-  goalType: "entry.1174770986",
-  boltScore: "entry.1002851429",
-  co2Score: "entry.197086545",
-  mbtScore: "entry.1392028128",
-  lomZone: "entry.1358412920",
-  romScore: "entry.1128018511",
-  balloonScore: "entry.1115436622",
-  age: "entry.1446995001",
-  gender: "entry.2121457013",
-  goalDetail: "entry.887435060",
-};
 
 const loadingMessages = [
   "Calibrating your RBI score...",
@@ -458,17 +439,8 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
         badge: result.badge,
       });
 
-      const baseResultsUrl =
-        process.env.NEXT_PUBLIC_GHL_RESULTS_URL ||
-        "https://results.recal.training/";
-      const url = new URL(baseResultsUrl);
-      url.searchParams.set("email", emailForLookup);
-      url.searchParams.set("name", firstName);
-      url.searchParams.set("goal", goal);
-      url.searchParams.set("score", String(result.score));
-      url.searchParams.set("grade", result.grade);
-      url.searchParams.set("badge", result.badge);
-      const resultsUrl = url.toString();
+      // Redirect to local /results page with query params
+      const resultsUrl = `/results?email=${encodeURIComponent(emailForLookup)}&name=${encodeURIComponent(firstName)}&goal=${encodeURIComponent(goal)}&score=${result.score}&grade=${encodeURIComponent(result.grade)}&badge=${encodeURIComponent(result.badge)}`;
 
       // Show "Calculating your results…" spinner for 5–7 seconds, then redirect (unconditional)
       const redirectDelayMs = 6000;
