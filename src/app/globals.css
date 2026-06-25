@@ -139,3 +139,12 @@ body {
 .animate-scroll:hover {
   animation-play-state: paused;
 }
+
+/* Custom logo filters for light theme */
+.recal-logo-navy {
+  filter: brightness(0) saturate(100%) invert(18%) sepia(35%) saturate(3025%) hue-rotate(178deg) brightness(96%) contrast(96%) !important;
+}
+
+.partner-logo-dark {
+  filter: brightness(0) !important;
+}
