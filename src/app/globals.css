@@ -146,5 +146,5 @@ body {
 }
 
 .partner-logo-dark {
-  filter: brightness(0) !important;
+  filter: none !important;
 }
