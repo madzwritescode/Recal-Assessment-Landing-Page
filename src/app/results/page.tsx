@@ -33,23 +33,33 @@ function ResultsContent() {
   let badgeImplication = "";
   let badgeColor = "#A2C2C7"; // default light ice-blue
 
-  if (badge.toLowerCase().includes("summit") && !badge.toLowerCase().includes("approaching")) {
-    badgeDescription = "Summit-Ready";
+  const bLower = badge.toLowerCase();
+
+  if (bLower.includes("master") || bLower.includes("everest")) {
+    badgeDescription = "Breath Master";
+    badgeColor = "#F59E0B"; // Gold
+    badgeImplication = "Exceptional, elite-level breathing tolerance. You possess superior carbon dioxide buffering capacity, showing minimal ventilation sensitivity, which is vital for extreme high altitude survival and climbing economy.";
+  } else if (bLower.includes("trained") || (bLower.includes("summit") && !bLower.includes("approaching"))) {
+    badgeDescription = "Breathwork-Trained";
     badgeColor = "#4A90A4"; // solid brand blue
     badgeImplication = "Excellent breath control and carbon dioxide tolerance. Your respiratory muscles are well-conditioned, which means you will use oxygen efficiently at altitude and suffer less early-stage exhaustion.";
-  } else if (badge.toLowerCase().includes("everest") || badge.toLowerCase().includes("elite")) {
-    badgeDescription = "Everest-Ready";
-    badgeColor = "#F59E0B"; // Gold
-    badgeImplication = "Exceptional, elite-level breathing tolerance. You possess superior carbon dioxide buffering capacity, showing minimal ventilation sensitivity, which is vital for extreme high altitude (above 18,000 ft) survival and climbing economy.";
-  } else if (badge.toLowerCase().includes("approaching")) {
-    badgeDescription = "Summit Approaching";
-    badgeColor = "#E11D48"; // Rose/Red
-    badgeImplication = "Your BOLT score and CO₂ tolerance indicate a highly sensitive respiratory system. At high altitude, this will trigger rapid hyperventilation, a spike in heart rate, and premature fatigue due to oxygen dumping.";
-  } else {
-    // Functional Breather / Intermediate
+  } else if (bLower.includes("functional")) {
     badgeDescription = "Functional Breather";
     badgeColor = "#10B981"; // Emerald green
     badgeImplication = "Good foundation, but there is significant room to optimize. Your sensitivity to carbon dioxide is moderate, meaning you will feel the urge to breathe heavily relatively early under physical exertion at altitude.";
+  } else if (bLower.includes("in-training") || bLower.includes("acclimatizing")) {
+    badgeDescription = "Breather-in-Training";
+    badgeColor = "#3B82F6"; // Blue
+    badgeImplication = "Decent base, but moderate respiratory inefficiency. With targeted training, you can significantly improve your oxygen utilization and reduce fatigue under heavy exertion.";
+  } else if (bLower.includes("beginner") && !bLower.includes("base camp")) {
+    badgeDescription = "Breath Beginner";
+    badgeColor = "#E11D48"; // Rose/Red
+    badgeImplication = "Your BOLT score and CO₂ tolerance indicate a highly sensitive respiratory system. At high altitude, this will trigger rapid hyperventilation, a spike in heart rate, and premature fatigue due to oxygen dumping.";
+  } else {
+    // Breath-Aware / Base Camp Beginner
+    badgeDescription = "Breath-Aware";
+    badgeColor = "#94A3B8"; // Slate gray
+    badgeImplication = "Your breathing is currently on auto-pilot with low carbon dioxide tolerance. Targeted breathwork training will provide rapid, noticeable improvements in your physical endurance and altitude resilience.";
   }
 
   return (

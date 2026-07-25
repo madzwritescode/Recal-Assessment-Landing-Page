@@ -256,12 +256,12 @@
     const finalScore  = Math.round((totalPoints / maxPoints) * 100);
 
     let grade = 'N/A', badge = 'N/A';
-    if      (finalScore >= 93) { grade = 'Ultra';     badge = 'Everest-Ready'; }
-    else if (finalScore >= 80) { grade = 'Great';     badge = 'Summit-Ready'; }
-    else if (finalScore >= 65) { grade = 'Good';      badge = 'Summit-Approaching'; }
-    else if (finalScore >= 50) { grade = 'Fair';      badge = 'Acclimatizing'; }
-    else if (finalScore >= 31) { grade = 'Poor';      badge = 'Altitude Apprentice'; }
-    else                       { grade = 'Very Poor'; badge = 'Base Camp Beginner'; }
+    if      (finalScore >= 93) { grade = 'Ultra';     badge = 'Breath Master'; }
+    else if (finalScore >= 80) { grade = 'Great';     badge = 'Breathwork-Trained'; }
+    else if (finalScore >= 65) { grade = 'Good';      badge = 'Functional Breather'; }
+    else if (finalScore >= 50) { grade = 'Fair';      badge = 'Breather-in-Training'; }
+    else if (finalScore >= 31) { grade = 'Poor';      badge = 'Breath Beginner'; }
+    else                       { grade = 'Very Poor'; badge = 'Breath-Aware'; }
 
     return { score: finalScore, grade, badge };
   };

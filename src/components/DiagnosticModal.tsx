@@ -131,22 +131,22 @@ const calculateRBI = (
   let badge = "N/A";
   if (finalScore >= 93) {
     grade = "Ultra";
-    badge = "Everest-Ready";
+    badge = "Breath Master";
   } else if (finalScore >= 80) {
     grade = "Great";
-    badge = "Summit-Ready";
+    badge = "Breathwork-Trained";
   } else if (finalScore >= 65) {
     grade = "Good";
-    badge = "Summit-Approaching";
+    badge = "Functional Breather";
   } else if (finalScore >= 50) {
     grade = "Fair";
-    badge = "Acclimatizing";
+    badge = "Breather-in-Training";
   } else if (finalScore >= 31) {
     grade = "Poor";
-    badge = "Altitude Apprentice";
+    badge = "Breath Beginner";
   } else {
     grade = "Very Poor";
-    badge = "Base Camp Beginner";
+    badge = "Breath-Aware";
   }
 
   return { score: finalScore, grade, badge };

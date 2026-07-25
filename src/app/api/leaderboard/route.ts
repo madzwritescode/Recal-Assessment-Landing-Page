@@ -134,19 +134,19 @@ export async function GET() {
       const lastName = lastNameIdx >= 0 ? row[lastNameIdx] ?? '' : '';
       
       // Dynamically calculate the proper V2 badge based on the total score
-      let badge = 'Summit-Ready';
+      let badge = 'Breathwork-Trained';
       if (score >= 93) {
-        badge = 'Everest-Ready';
+        badge = 'Breath Master';
       } else if (score >= 80) {
-        badge = 'Summit-Ready';
+        badge = 'Breathwork-Trained';
       } else if (score >= 65) {
-        badge = 'Summit-Approaching';
+        badge = 'Functional Breather';
       } else if (score >= 50) {
-        badge = 'Acclimatizing';
+        badge = 'Breather-in-Training';
       } else if (score >= 31) {
-        badge = 'Altitude Apprentice';
+        badge = 'Breath Beginner';
       } else {
-        badge = 'Base Camp Beginner';
+        badge = 'Breath-Aware';
       }
 
       const gType = goalTypeIdx >= 0 ? row[goalTypeIdx] ?? '' : '';
