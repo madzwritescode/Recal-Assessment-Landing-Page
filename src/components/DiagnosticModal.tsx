@@ -509,7 +509,7 @@ export const DiagnosticModal = ({ isOpen, onClose, initialLead }: DiagnosticModa
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
           <li>A timer</li>
           <li>Space to walk in a straight line</li>
-          <li>A tape measure (or shoelace + ruler)</li>
+          <li>Balloons</li>
         </ul>
       </div>
       <p className="text-base text-slate-700">
