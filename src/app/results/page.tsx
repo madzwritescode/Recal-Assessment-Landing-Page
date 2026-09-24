@@ -210,7 +210,7 @@ function ResultsContent() {
                     Live Workshop
                   </h4>
                   <p className="text-xs text-[#A2C2C7] font-black uppercase tracking-wider">
-                    June 23rd and 24th
+                    Attend the Live Workshop Session
                   </p>
                 </div>
                 <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
@@ -223,7 +223,7 @@ function ResultsContent() {
                   href="https://launch.recal.training/live-webinar-registration" 
                   className="w-full text-center block py-3 rounded-lg font-black text-white bg-[#0A4367] hover:bg-[#105987] transition-all border border-[#A2C2C7]/30 shadow-md tracking-wider text-xs md:text-sm uppercase cursor-pointer hover:shadow-[#A2C2C7]/10"
                 >
-                  Secure My Live Spot &rarr;
+                  Attend Live Workshop Session &rarr;
                 </a>
               </div>
             </div>
