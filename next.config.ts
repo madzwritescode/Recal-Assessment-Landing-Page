@@ -42,6 +42,14 @@ const nextConfig: NextConfig = {
         source: "/srs-rbi/",
         destination: "/srs-rbi/index.html",
       },
+      {
+        source: "/partnerships",
+        destination: "/partnerships/index.html",
+      },
+      {
+        source: "/partnerships/",
+        destination: "/partnerships/index.html",
+      },
     ];
   },
 };

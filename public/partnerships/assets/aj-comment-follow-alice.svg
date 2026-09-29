@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 310" width="100%" height="100%">
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0  0 0 0 0.35 0"/>
+      <feOffset dx="0" dy="6"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="avatarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EE5769"/>
+      <stop offset="100%" stop-color="#C23B4C"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F8FAFC"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Screenshot Container Window -->
+  <g filter="url(#shadow)">
+    <rect x="12" y="12" width="516" height="286" rx="14" fill="url(#cardGrad)" stroke="#E2E8F0" stroke-width="1.5"/>
+  </g>
+
+  <!-- Card Header Bar -->
+  <rect x="12" y="12" width="516" height="46" rx="14" fill="#0A4367"/>
+  <rect x="12" y="44" width="516" height="14" fill="#0A4367"/>
+
+  <!-- Window Dots / Screenshot Chrome -->
+  <circle cx="34" cy="35" r="5" fill="#EF4444" opacity="0.85"/>
+  <circle cx="50" cy="35" r="5" fill="#F59E0B" opacity="0.85"/>
+  <circle cx="66" cy="35" r="5" fill="#10B981" opacity="0.85"/>
+
+  <!-- Header Title -->
+  <text x="90" y="39" font-family="-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif" font-size="12" font-weight="700" fill="#FFFFFF" letter-spacing="0.04em">
+    FOLLOW ALICE · CLIENT DEBRIEF
+  </text>
+  <text x="495" y="39" font-family="-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif" font-size="11" font-weight="600" fill="#A2C2C7" text-anchor="end">
+    July 2026
+  </text>
+
+  <!-- Author Info -->
+  <g transform="translate(32, 74)">
+    <!-- Avatar -->
+    <circle cx="22" cy="22" r="22" fill="url(#avatarGrad)"/>
+    <text x="22" y="27" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-size="14" font-weight="800" fill="#FFFFFF" text-anchor="middle">
+      AJ
+    </text>
+
+    <!-- Name & Details -->
+    <text x="56" y="17" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-size="15" font-weight="800" fill="#0F172A">
+      AJ
+    </text>
+    <text x="82" y="17" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-size="12" font-weight="500" fill="#64748B">
+      · Kilimanjaro Climber (Lemosho Route)
+    </text>
+
+    <!-- Stars -->
+    <text x="56" y="34" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#F59E0B">
+      ★★★★★
+    </text>
+    <text x="125" y="33" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-size="10.5" font-weight="700" fill="#059669">
+      ✓ Verified Summit Feedback
+    </text>
+  </g>
+
+  <!-- Quote Body -->
+  <g transform="translate(32, 140)">
+    <rect x="0" y="0" width="476" height="96" rx="8" fill="#F1F5F9" stroke="#E2E8F0" stroke-width="1"/>
+    
+    <text x="16" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Inter', Georgia, serif" font-size="13.5" font-style="italic" fill="#1E293B" line-height="1.5">
+      <tspan x="16" dy="0">“I appreciated the way you genuinely cared about my preparation plan,</tspan>
+      <tspan x="16" dy="22">especially linking me up with Anthony’s training — and it paid off on</tspan>
+      <tspan x="16" dy="22">Kilimanjaro. Breathing steady when everyone else was gasping made</tspan>
+      <tspan x="16" dy="22">all the difference.”</tspan>
+    </text>
+  </g>
+
+  <!-- Card Footer / Attribution -->
+  <g transform="translate(32, 256)">
+    <text x="0" y="15" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-size="11" font-weight="600" fill="#64748B">
+      Follow Alice Post-Kilimanjaro Outfitter Review
+    </text>
+    <text x="476" y="15" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-size="11" font-weight="700" fill="#0A4367" text-anchor="end">
+      followalice.com
+    </text>
+  </g>
+</svg>
