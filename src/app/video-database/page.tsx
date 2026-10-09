@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { RecalVideoRecord } from "@/lib/supabase";
+import { classifyVideo } from "@/lib/video-sync/classifier";
 
 interface VideoStats {
   total: number;
@@ -47,6 +48,9 @@ export default function VideoDatabasePage() {
   const [privacyFilter, setPrivacyFilter] = useState<string>("all");
   const [durationFilter, setDurationFilter] = useState<string>("all");
   const [liveFilter, setLiveFilter] = useState<string>("all");
+  const [orientationFilter, setOrientationFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [starredOnly, setStarredOnly] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<string>("newest");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [page, setPage] = useState<number>(1);
@@ -54,9 +58,26 @@ export default function VideoDatabasePage() {
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalItems, setTotalItems] = useState<number>(0);
 
+  // Editorial Favorites & Notes (persisted locally)
+  const [starredMap, setStarredMap] = useState<Record<string, boolean>>({});
+  const [notesMap, setNotesMap] = useState<Record<string, string>>({});
+  const [drawerNote, setDrawerNote] = useState<string>("");
+
   // Inspector Drawer
   const [selectedVideo, setSelectedVideo] = useState<RecalVideoRecord | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Load Starred and Notes from localStorage
+  useEffect(() => {
+    try {
+      const savedStars = localStorage.getItem("recal_starred_videos");
+      if (savedStars) setStarredMap(JSON.parse(savedStars));
+      const savedNotes = localStorage.getItem("recal_video_notes");
+      if (savedNotes) setNotesMap(JSON.parse(savedNotes));
+    } catch {
+      // Ignore localStorage issues
+    }
+  }, []);
 
   // Check sync & auth status
   const fetchStatus = useCallback(async () => {
@@ -134,10 +155,79 @@ export default function VideoDatabasePage() {
     }
   }, [fetchStatus, fetchVideos]);
 
+  // Disconnect YouTube Handler
+  const handleDisconnectYouTube = async () => {
+    if (!confirm("Are you sure you want to disconnect this YouTube account? You can then reconnect with Anthony's owner account.")) {
+      return;
+    }
+    try {
+      const res = await fetch("/api/video-database/auth/disconnect", { method: "POST" });
+      if (res.ok) {
+        setYoutubeConnected(false);
+        setChannelTitle(null);
+        setSyncMessage({
+          type: "success",
+          text: "YouTube account disconnected. You can now connect Anthony's channel owner account.",
+        });
+        await fetchStatus();
+      }
+    } catch (err) {
+      console.error("Failed to disconnect YouTube:", err);
+    }
+  };
+
+  // Toggle Star / Favorite
+  const toggleStar = (sourceId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setStarredMap((prev) => {
+      const updated = { ...prev, [sourceId]: !prev[sourceId] };
+      try {
+        localStorage.setItem("recal_starred_videos", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  // Save Editorial Note
+  const saveNote = (sourceId: string, text: string) => {
+    setNotesMap((prev) => {
+      const updated = { ...prev, [sourceId]: text };
+      try {
+        localStorage.setItem("recal_video_notes", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  // Update Drawer Note when selected video changes
+  useEffect(() => {
+    if (selectedVideo) {
+      setDrawerNote(notesMap[selectedVideo.source_id] || "");
+    }
+  }, [selectedVideo, notesMap]);
+
+  // Filter videos locally by Orientation & Category & Starred
+  const displayedVideos = useMemo(() => {
+    return videos.filter((video) => {
+      const classification = classifyVideo(video.title, video.folder_path || "", video.duration_seconds);
+
+      if (orientationFilter !== "all" && classification.orientation !== orientationFilter) {
+        return false;
+      }
+      if (categoryFilter !== "all" && classification.category !== categoryFilter) {
+        return false;
+      }
+      if (starredOnly && !starredMap[video.source_id]) {
+        return false;
+      }
+      return true;
+    });
+  }, [videos, orientationFilter, categoryFilter, starredOnly, starredMap]);
+
   // Trigger Live Full Sync
   const handleTriggerSync = async () => {
     setSyncing(true);
-    setSyncProgress("Initializing scan of Google Drive & YouTube...");
+    setSyncProgress("Initializing deep scan of Google Drive & YouTube...");
     setSyncMessage(null);
 
     try {
@@ -181,42 +271,52 @@ export default function VideoDatabasePage() {
 
   // Export filtered dataset to CSV
   const handleExportCsv = () => {
-    if (videos.length === 0) return;
+    if (displayedVideos.length === 0) return;
     const headers = [
       "Title",
       "Source",
+      "Orientation",
+      "Content Category",
+      "Is Starred",
+      "Editorial Notes",
       "Privacy Status",
-      "Is Live",
       "Runtime",
       "Runtime (Seconds)",
       "File Size",
-      "File Size (Bytes)",
       "Views",
       "Folder Path",
       "Direct URL",
       "Date",
     ];
 
-    const rows = videos.map((v) => [
-      `"${(v.title || "").replace(/"/g, '""')}"`,
-      v.source,
-      v.privacy_status,
-      v.is_live ? "Yes" : "No",
-      v.duration_formatted || "",
-      v.duration_seconds || 0,
-      v.file_size_formatted || "",
-      v.file_size_bytes || 0,
-      v.view_count || 0,
-      `"${(v.folder_path || "").replace(/"/g, '""')}"`,
-      v.direct_url,
-      v.published_at || v.created_at || "",
-    ]);
+    const rows = displayedVideos.map((v) => {
+      const cls = classifyVideo(v.title, v.folder_path || "", v.duration_seconds);
+      const isStarred = Boolean(starredMap[v.source_id]);
+      const note = (notesMap[v.source_id] || "").replace(/"/g, '""');
+
+      return [
+        `"${(v.title || "").replace(/"/g, '""')}"`,
+        v.source,
+        cls.orientation,
+        cls.category,
+        isStarred ? "Yes" : "No",
+        `"${note}"`,
+        v.privacy_status,
+        v.duration_formatted || "",
+        v.duration_seconds || 0,
+        v.file_size_formatted || "",
+        v.view_count || 0,
+        `"${(v.folder_path || "").replace(/"/g, '""')}"`,
+        v.direct_url,
+        v.published_at || v.created_at || "",
+      ];
+    });
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `recal_video_database_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("download", `recal_content_calendar_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -251,22 +351,31 @@ export default function VideoDatabasePage() {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold tracking-tight text-white">Recal Video Database</h1>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  Live Master Catalog
+                  Content Creator Studio
                 </span>
               </div>
               <p className="text-xs text-[#94A3B8]">
-                Scouring Google Drive (Recal Marketing) & YouTube Studio for content calendar lookup
+                Unified lookup catalog for content calendar planning, repurposing, and asset management
               </p>
             </div>
           </div>
 
           {/* Action Toolbar */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* YouTube Auth Badge / Button */}
+            {/* YouTube Auth Badge / Button & Disconnect */}
             {youtubeConnected ? (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                YouTube Connected {channelTitle ? `(${channelTitle})` : ""}
+              <div className="flex items-center gap-1.5 bg-[#131B2E] border border-[#1E293B] rounded-lg p-1">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-emerald-400 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  YouTube: {channelTitle || "Connected"}
+                </div>
+                <button
+                  onClick={handleDisconnectYouTube}
+                  className="px-2 py-1 rounded hover:bg-rose-950/40 text-[11px] text-rose-400 hover:text-rose-300 transition"
+                  title="Disconnect and switch account"
+                >
+                  ✕ Disconnect
+                </button>
               </div>
             ) : (
               <a
@@ -283,9 +392,9 @@ export default function VideoDatabasePage() {
             {/* Export CSV */}
             <button
               onClick={handleExportCsv}
-              disabled={videos.length === 0}
+              disabled={displayedVideos.length === 0}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-xs text-[#E2E8F0] font-medium transition disabled:opacity-50"
-              title="Export current filtered view to CSV"
+              title="Export filtered content calendar to CSV"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -351,7 +460,7 @@ export default function VideoDatabasePage() {
             <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
               <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Total Videos</span>
               <span className="text-2xl font-bold text-white mt-1 block">{stats.total.toLocaleString()}</span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">Cataloged assets</span>
+              <span className="text-[11px] text-[#64748B] mt-0.5 block">Exact verified assets</span>
             </div>
 
             {/* Google Drive Raw */}
@@ -426,70 +535,116 @@ export default function VideoDatabasePage() {
               )}
             </div>
 
-            {/* Source Tab Toggle */}
-            <div className="flex items-center bg-[#0B0F17] border border-[#1E293B] rounded-lg p-1 text-xs font-medium">
+            {/* Source Tab Toggle & Starred Filter */}
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => {
-                  setSourceFilter("all");
-                  setPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-md transition ${
-                  sourceFilter === "all" ? "bg-blue-600 text-white font-semibold" : "text-[#94A3B8] hover:text-white"
+                onClick={() => setStarredOnly(!starredOnly)}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition ${
+                  starredOnly
+                    ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                    : "bg-[#0B0F17] text-[#94A3B8] border-[#1E293B] hover:text-white"
                 }`}
+                title="Filter by starred/favorite assets"
               >
-                All Sources
+                <span>⭐</span>
+                <span>Favorites</span>
               </button>
-              <button
-                onClick={() => {
-                  setSourceFilter("gdrive");
-                  setPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
-                  sourceFilter === "gdrive" ? "bg-amber-600 text-white font-semibold" : "text-[#94A3B8] hover:text-white"
-                }`}
-              >
-                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                Google Drive
-              </button>
-              <button
-                onClick={() => {
-                  setSourceFilter("youtube");
-                  setPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
-                  sourceFilter === "youtube" ? "bg-red-600 text-white font-semibold" : "text-[#94A3B8] hover:text-white"
-                }`}
-              >
-                <span className="w-2 h-2 rounded-full bg-red-400"></span>
-                YouTube
-              </button>
-            </div>
 
-            {/* View Mode Switcher */}
-            <div className="flex items-center bg-[#0B0F17] border border-[#1E293B] rounded-lg p-1 text-xs">
-              <button
-                onClick={() => setViewMode("table")}
-                className={`p-1.5 rounded-md ${viewMode === "table" ? "bg-[#1E293B] text-white" : "text-[#64748B] hover:text-white"}`}
-                title="Table View (Content Calendar Lookup)"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18" />
-                </svg>
-              </button>
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded-md ${viewMode === "grid" ? "bg-[#1E293B] text-white" : "text-[#64748B] hover:text-white"}`}
-                title="Grid / Card View"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-              </button>
+              <div className="flex items-center bg-[#0B0F17] border border-[#1E293B] rounded-lg p-1 text-xs font-medium">
+                <button
+                  onClick={() => {
+                    setSourceFilter("all");
+                    setPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-md transition ${
+                    sourceFilter === "all" ? "bg-blue-600 text-white font-semibold" : "text-[#94A3B8] hover:text-white"
+                  }`}
+                >
+                  All Sources
+                </button>
+                <button
+                  onClick={() => {
+                    setSourceFilter("gdrive");
+                    setPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
+                    sourceFilter === "gdrive" ? "bg-amber-600 text-white font-semibold" : "text-[#94A3B8] hover:text-white"
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                  Drive
+                </button>
+                <button
+                  onClick={() => {
+                    setSourceFilter("youtube");
+                    setPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
+                    sourceFilter === "youtube" ? "bg-red-600 text-white font-semibold" : "text-[#94A3B8] hover:text-white"
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                  YouTube
+                </button>
+              </div>
+
+              {/* View Mode Switcher */}
+              <div className="flex items-center bg-[#0B0F17] border border-[#1E293B] rounded-lg p-1 text-xs">
+                <button
+                  onClick={() => setViewMode("table")}
+                  className={`p-1.5 rounded-md ${viewMode === "table" ? "bg-[#1E293B] text-white" : "text-[#64748B] hover:text-white"}`}
+                  title="Table View (Content Calendar Lookup)"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`p-1.5 rounded-md ${viewMode === "grid" ? "bg-[#1E293B] text-white" : "text-[#64748B] hover:text-white"}`}
+                  title="Grid / Card View"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Granular Filter Selectors */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[#1E293B]/60 text-xs">
+          {/* Superpower Content Creator Filters */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-2 border-t border-[#1E293B]/60 text-xs">
+            {/* Orientation Filter */}
+            <div>
+              <label className="text-[10px] text-[#64748B] uppercase font-bold tracking-wider mb-1 block">Format / Ratio</label>
+              <select
+                value={orientationFilter}
+                onChange={(e) => setOrientationFilter(e.target.value)}
+                className="w-full bg-[#0B0F17] border border-[#1E293B] rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="all">All Formats</option>
+                <option value="vertical">📱 9:16 Vertical (Shorts/Reels)</option>
+                <option value="horizontal">🖥️ 16:9 Landscape (YouTube)</option>
+              </select>
+            </div>
+
+            {/* Content Category Filter */}
+            <div>
+              <label className="text-[10px] text-[#64748B] uppercase font-bold tracking-wider mb-1 block">Content Pillar</label>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="w-full bg-[#0B0F17] border border-[#1E293B] rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="all">All Pillars</option>
+                <option value="webinar">🟣 Webinars &amp; Q&amp;As</option>
+                <option value="ad">🟠 Paid Social Ads</option>
+                <option value="final_cut">🟢 Finished Master Cuts</option>
+                <option value="raw_footage">🟡 Raw Camera Footage</option>
+                <option value="campaign">🏔️ Expedition Campaigns</option>
+              </select>
+            </div>
+
             {/* Privacy Filter */}
             <div>
               <label className="text-[10px] text-[#64748B] uppercase font-bold tracking-wider mb-1 block">Visibility</label>
@@ -573,7 +728,7 @@ export default function VideoDatabasePage() {
             <div className="inline-block w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-sm text-[#94A3B8]">Loading video assets from database...</p>
           </div>
-        ) : videos.length === 0 ? (
+        ) : displayedVideos.length === 0 ? (
           <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-12 text-center space-y-4">
             <div className="w-12 h-12 rounded-full bg-blue-500/10 text-blue-400 mx-auto flex items-center justify-center">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -581,22 +736,11 @@ export default function VideoDatabasePage() {
               </svg>
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white">No video records found</h3>
+              <h3 className="text-base font-semibold text-white">No matching video records</h3>
               <p className="text-xs text-[#94A3B8] max-w-md mx-auto mt-1">
-                {totalItems === 0
-                  ? "Your database is ready. Click 'Sync Database Now' at the top to crawl Google Drive and YouTube Studio."
-                  : "No videos match your active filter criteria. Try adjusting the search or filters."}
+                No videos match your active filter criteria. Try adjusting the search or filters.
               </p>
             </div>
-            {totalItems === 0 && (
-              <button
-                onClick={handleTriggerSync}
-                disabled={syncing}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-blue-500/20"
-              >
-                Start Initial Sync
-              </button>
-            )}
           </div>
         ) : viewMode === "table" ? (
           /* Table View */
@@ -605,8 +749,9 @@ export default function VideoDatabasePage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#0E1526] text-[#94A3B8] uppercase text-[10px] tracking-wider border-b border-[#1E293B]">
                   <tr>
+                    <th className="py-3 px-3 w-8">Fav</th>
                     <th className="py-3 px-4">Video Asset &amp; Location</th>
-                    <th className="py-3 px-3">Source</th>
+                    <th className="py-3 px-3">Format / Pillar</th>
                     <th className="py-3 px-3">Visibility</th>
                     <th className="py-3 px-3">Runtime</th>
                     <th className="py-3 px-3">Size / Views</th>
@@ -615,130 +760,156 @@ export default function VideoDatabasePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#1E293B]/70">
-                  {videos.map((video) => (
-                    <tr
-                      key={video.source_id}
-                      onClick={() => setSelectedVideo(video)}
-                      className="hover:bg-[#1E293B]/50 transition cursor-pointer group"
-                    >
-                      {/* Title & Folder Path */}
-                      <td className="py-3 px-4 max-w-md">
-                        <div className="flex items-start gap-3">
-                          {/* Thumbnail / Platform Icon */}
-                          <div className="w-12 h-8 rounded bg-[#0B0F17] border border-[#1E293B] flex-shrink-0 overflow-hidden flex items-center justify-center relative">
-                            {video.thumbnail_url ? (
-                              <img
-                                src={video.thumbnail_url}
-                                alt=""
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-[10px] text-[#64748B]">
-                                {video.source === "youtube" ? "▶" : "📁"}
-                              </span>
-                            )}
-                            {video.is_live && (
-                              <span className="absolute bottom-0 right-0 px-1 bg-red-600 text-[8px] font-bold text-white uppercase rounded-tl">
-                                LIVE
-                              </span>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <span className="font-semibold text-white group-hover:text-blue-400 transition truncate block">
-                              {video.title}
-                            </span>
-                            <span className="text-[11px] text-[#64748B] truncate block flex items-center gap-1 mt-0.5">
-                              <span className="opacity-75">📍</span>
-                              {video.folder_path || "Recal Media"}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
+                  {displayedVideos.map((video) => {
+                    const cls = classifyVideo(video.title, video.folder_path || "", video.duration_seconds);
+                    const isStarred = Boolean(starredMap[video.source_id]);
+                    const hasNote = Boolean(notesMap[video.source_id]);
 
-                      {/* Source */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        {video.source === "youtube" ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 text-[11px] font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
-                            YouTube
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                            Drive
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Visibility / Privacy */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        {video.privacy_status === "unlisted" && (
-                          <span className="px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[11px] font-medium">
-                            Unlisted
-                          </span>
-                        )}
-                        {video.privacy_status === "public" && (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium">
-                            Public
-                          </span>
-                        )}
-                        {video.privacy_status === "private" && (
-                          <span className="px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20 text-[11px] font-medium">
-                            Private
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Runtime */}
-                      <td className="py-3 px-3 whitespace-nowrap font-mono text-xs text-[#CBD5E1]">
-                        {video.duration_formatted || `${video.duration_seconds}s`}
-                      </td>
-
-                      {/* Size / Views */}
-                      <td className="py-3 px-3 whitespace-nowrap text-[#CBD5E1]">
-                        {video.source === "youtube" ? (
-                          <span>{(video.view_count || 0).toLocaleString()} views</span>
-                        ) : (
-                          <span>{video.file_size_formatted || "—"}</span>
-                        )}
-                      </td>
-
-                      {/* Date */}
-                      <td className="py-3 px-3 whitespace-nowrap text-[#64748B] text-[11px]">
-                        {video.published_at ? new Date(video.published_at).toLocaleDateString() : "—"}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          <a
-                            href={video.direct_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded-md hover:bg-[#334155] text-[#94A3B8] hover:text-white transition"
-                            title="Open video link in new tab"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </a>
+                    return (
+                      <tr
+                        key={video.source_id}
+                        onClick={() => setSelectedVideo(video)}
+                        className="hover:bg-[#1E293B]/50 transition cursor-pointer group"
+                      >
+                        {/* Star Favorite Button */}
+                        <td className="py-3 px-3 whitespace-nowrap">
                           <button
-                            onClick={() => handleCopy(video.direct_url, video.source_id)}
-                            className="p-1.5 rounded-md hover:bg-[#334155] text-[#94A3B8] hover:text-white transition"
-                            title="Copy Direct URL"
+                            onClick={(e) => toggleStar(video.source_id, e)}
+                            className="text-sm opacity-60 hover:opacity-100 hover:scale-125 transition"
+                            title={isStarred ? "Remove from Favorites" : "Add to Favorites"}
                           >
-                            {copiedId === video.source_id ? (
-                              <span className="text-emerald-400 text-[10px] font-bold">✓</span>
-                            ) : (
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                              </svg>
-                            )}
+                            {isStarred ? "⭐" : "☆"}
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+
+                        {/* Title & Folder Path */}
+                        <td className="py-3 px-4 max-w-md">
+                          <div className="flex items-start gap-3">
+                            {/* Thumbnail / Platform Icon */}
+                            <div className="w-12 h-8 rounded bg-[#0B0F17] border border-[#1E293B] flex-shrink-0 overflow-hidden flex items-center justify-center relative">
+                              {video.thumbnail_url ? (
+                                <img
+                                  src={video.thumbnail_url}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-[10px] text-[#64748B]">
+                                  {video.source === "youtube" ? "▶" : "📁"}
+                                </span>
+                              )}
+                              {video.is_live && (
+                                <span className="absolute bottom-0 right-0 px-1 bg-red-600 text-[8px] font-bold text-white uppercase rounded-tl">
+                                  LIVE
+                                </span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="font-semibold text-white group-hover:text-blue-400 transition truncate block flex items-center gap-1.5">
+                                {video.title}
+                                {hasNote && (
+                                  <span className="text-[9px] px-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 font-normal">
+                                    📝 Note
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-[11px] text-[#64748B] truncate block flex items-center gap-1 mt-0.5">
+                                <span className="opacity-75">📍</span>
+                                {video.folder_path || "Recal Media"}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Format & Pillar Badges */}
+                        <td className="py-3 px-3 whitespace-nowrap space-y-1">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {/* Orientation */}
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                              cls.orientation === 'vertical'
+                                ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                                : 'bg-slate-500/10 text-slate-300 border-slate-500/20'
+                            }`}>
+                              {cls.orientation === 'vertical' ? '📱 9:16' : '🖥️ 16:9'}
+                            </span>
+
+                            {/* Content Category */}
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${cls.categoryColor}`}>
+                              {cls.categoryLabel}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Visibility / Privacy */}
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          {video.privacy_status === "unlisted" && (
+                            <span className="px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[11px] font-medium">
+                              Unlisted
+                            </span>
+                          )}
+                          {video.privacy_status === "public" && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium">
+                              Public
+                            </span>
+                          )}
+                          {video.privacy_status === "private" && (
+                            <span className="px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20 text-[11px] font-medium">
+                              Private
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Runtime */}
+                        <td className="py-3 px-3 whitespace-nowrap font-mono text-xs text-[#CBD5E1]">
+                          {video.duration_formatted || `${video.duration_seconds}s`}
+                        </td>
+
+                        {/* Size / Views */}
+                        <td className="py-3 px-3 whitespace-nowrap text-[#CBD5E1]">
+                          {video.source === "youtube" ? (
+                            <span>{(video.view_count || 0).toLocaleString()} views</span>
+                          ) : (
+                            <span>{video.file_size_formatted || "—"}</span>
+                          )}
+                        </td>
+
+                        {/* Date */}
+                        <td className="py-3 px-3 whitespace-nowrap text-[#64748B] text-[11px]">
+                          {video.published_at ? new Date(video.published_at).toLocaleDateString() : "—"}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3 px-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <a
+                              href={video.direct_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-md hover:bg-[#334155] text-[#94A3B8] hover:text-white transition"
+                              title="Open video in new tab"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
+                            <button
+                              onClick={() => handleCopy(video.direct_url, video.source_id)}
+                              className="p-1.5 rounded-md hover:bg-[#334155] text-[#94A3B8] hover:text-white transition"
+                              title="Copy Direct URL"
+                            >
+                              {copiedId === video.source_id ? (
+                                <span className="text-emerald-400 text-[10px] font-bold">✓</span>
+                              ) : (
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -790,61 +961,79 @@ export default function VideoDatabasePage() {
           /* Grid / Card View */
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {videos.map((video) => (
-                <div
-                  key={video.source_id}
-                  onClick={() => setSelectedVideo(video)}
-                  className="bg-[#131B2E] border border-[#1E293B] rounded-xl overflow-hidden shadow-sm hover:border-blue-500/50 hover:shadow-blue-500/10 transition cursor-pointer flex flex-col"
-                >
-                  {/* Thumbnail Banner */}
-                  <div className="h-40 bg-[#0B0F17] relative flex items-center justify-center overflow-hidden">
-                    {video.thumbnail_url ? (
-                      <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-3xl text-[#334155]">
-                        {video.source === "youtube" ? "▶" : "📁"}
-                      </span>
-                    )}
-                    {/* Duration Badge */}
-                    <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/80 font-mono text-[10px] text-white font-medium">
-                      {video.duration_formatted || `${video.duration_seconds}s`}
-                    </div>
-                    {/* Platform Badge */}
-                    <div className="absolute top-2 left-2">
-                      {video.source === "youtube" ? (
-                        <span className="px-2 py-0.5 rounded bg-red-600/90 text-[10px] font-bold text-white uppercase tracking-wider">
-                          YouTube
-                        </span>
+              {displayedVideos.map((video) => {
+                const cls = classifyVideo(video.title, video.folder_path || "", video.duration_seconds);
+                const isStarred = Boolean(starredMap[video.source_id]);
+
+                return (
+                  <div
+                    key={video.source_id}
+                    onClick={() => setSelectedVideo(video)}
+                    className="bg-[#131B2E] border border-[#1E293B] rounded-xl overflow-hidden shadow-sm hover:border-blue-500/50 hover:shadow-blue-500/10 transition cursor-pointer flex flex-col"
+                  >
+                    {/* Thumbnail Banner */}
+                    <div className="h-40 bg-[#0B0F17] relative flex items-center justify-center overflow-hidden">
+                      {video.thumbnail_url ? (
+                        <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
                       ) : (
-                        <span className="px-2 py-0.5 rounded bg-amber-600/90 text-[10px] font-bold text-white uppercase tracking-wider">
-                          Drive
+                        <span className="text-3xl text-[#334155]">
+                          {video.source === "youtube" ? "▶" : "📁"}
                         </span>
                       )}
+                      {/* Star Button */}
+                      <button
+                        onClick={(e) => toggleStar(video.source_id, e)}
+                        className="absolute top-2 right-2 text-lg hover:scale-125 transition drop-shadow"
+                      >
+                        {isStarred ? "⭐" : "☆"}
+                      </button>
+
+                      {/* Duration Badge */}
+                      <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/80 font-mono text-[10px] text-white font-medium">
+                        {video.duration_formatted || `${video.duration_seconds}s`}
+                      </div>
+
+                      {/* Platform & Orientation Badges */}
+                      <div className="absolute top-2 left-2 flex items-center gap-1">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white uppercase tracking-wider ${
+                          video.source === 'youtube' ? 'bg-red-600/90' : 'bg-amber-600/90'
+                        }`}>
+                          {video.source === 'youtube' ? 'YT' : 'Drive'}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-black/75 text-[10px] text-white font-mono">
+                          {cls.orientation === 'vertical' ? '📱 9:16' : '🖥️ 16:9'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Body Content */}
+                    <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="mb-1">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${cls.categoryColor}`}>
+                            {cls.categoryLabel}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-semibold text-white line-clamp-2">{video.title}</h4>
+                        <p className="text-xs text-[#64748B] line-clamp-1 mt-1">
+                          📍 {video.folder_path || "Recal Marketing"}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-[#1E293B] flex items-center justify-between text-xs text-[#94A3B8]">
+                        <span>
+                          {video.source === "youtube"
+                            ? `${(video.view_count || 0).toLocaleString()} views`
+                            : video.file_size_formatted || "—"}
+                        </span>
+                        <span className="capitalize px-1.5 py-0.5 rounded bg-[#1E293B] text-[10px] text-slate-300">
+                          {video.privacy_status}
+                        </span>
+                      </div>
                     </div>
                   </div>
-
-                  {/* Body Content */}
-                  <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                    <div>
-                      <h4 className="text-sm font-semibold text-white line-clamp-2">{video.title}</h4>
-                      <p className="text-xs text-[#64748B] line-clamp-1 mt-1">
-                        📍 {video.folder_path || "Recal Marketing"}
-                      </p>
-                    </div>
-
-                    <div className="pt-2 border-t border-[#1E293B] flex items-center justify-between text-xs text-[#94A3B8]">
-                      <span>
-                        {video.source === "youtube"
-                          ? `${(video.view_count || 0).toLocaleString()} views`
-                          : video.file_size_formatted || "—"}
-                      </span>
-                      <span className="capitalize px-1.5 py-0.5 rounded bg-[#1E293B] text-[10px] text-slate-300">
-                        {video.privacy_status}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Pagination Toolbar */}
@@ -873,7 +1062,7 @@ export default function VideoDatabasePage() {
         )}
       </main>
 
-      {/* Video Inspector Slide-Over Drawer */}
+      {/* Video Inspector Slide-Over Drawer with In-App Preview Player */}
       {selectedVideo && (
         <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
           {/* Backdrop */}
@@ -883,11 +1072,18 @@ export default function VideoDatabasePage() {
           ></div>
 
           {/* Drawer Content */}
-          <div className="relative w-full max-w-lg bg-[#0E1526] border-l border-[#1E293B] h-full shadow-2xl flex flex-col z-10 overflow-y-auto">
+          <div className="relative w-full max-w-xl bg-[#0E1526] border-l border-[#1E293B] h-full shadow-2xl flex flex-col z-10 overflow-y-auto">
             {/* Drawer Header */}
             <div className="p-4 border-b border-[#1E293B] flex items-center justify-between sticky top-0 bg-[#0E1526]/95 backdrop-blur z-20">
               <div className="flex items-center gap-2">
-                <span className="text-xs uppercase font-bold text-blue-400 tracking-wider">Video Inspector</span>
+                <button
+                  onClick={() => toggleStar(selectedVideo.source_id)}
+                  className="text-lg hover:scale-125 transition"
+                  title="Toggle Favorite"
+                >
+                  {starredMap[selectedVideo.source_id] ? "⭐" : "☆"}
+                </button>
+                <span className="text-xs uppercase font-bold text-blue-400 tracking-wider">Video Inspector &amp; Player</span>
               </div>
               <button
                 onClick={() => setSelectedVideo(null)}
@@ -899,24 +1095,45 @@ export default function VideoDatabasePage() {
 
             {/* Drawer Body */}
             <div className="p-6 space-y-6">
-              {/* Media Preview / Thumbnail */}
-              <div className="w-full rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center relative border border-[#1E293B]">
-                {selectedVideo.thumbnail_url ? (
-                  <img src={selectedVideo.thumbnail_url} alt="" className="w-full h-full object-cover" />
+              {/* In-App Streamable Video Player */}
+              <div className="w-full rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center relative border border-[#1E293B] shadow-lg">
+                {selectedVideo.source === "youtube" ? (
+                  <iframe
+                    src={`https://www.youtube-nocookie.com/embed/${selectedVideo.source_id}?autoplay=1`}
+                    title={selectedVideo.title}
+                    className="w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
                 ) : (
-                  <div className="text-center text-[#64748B] space-y-2">
-                    <span className="text-4xl">{selectedVideo.source === "youtube" ? "▶" : "📁"}</span>
-                    <p className="text-xs">Preview thumbnail unavailable</p>
-                  </div>
+                  <iframe
+                    src={`https://drive.google.com/file/d/${selectedVideo.source_id}/preview`}
+                    title={selectedVideo.title}
+                    className="w-full h-full border-0"
+                    allow="autoplay"
+                    allowFullScreen
+                  />
                 )}
-                <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded bg-black/80 font-mono text-xs text-white">
-                  {selectedVideo.duration_formatted}
-                </div>
               </div>
 
-              {/* Title & Location */}
+              {/* Title & Classification Badges */}
               <div>
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  {/* Format */}
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    {classifyVideo(selectedVideo.title, selectedVideo.folder_path || "", selectedVideo.duration_seconds).orientationLabel}
+                  </span>
+                  {/* Category */}
+                  <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                    classifyVideo(selectedVideo.title, selectedVideo.folder_path || "", selectedVideo.duration_seconds).categoryColor
+                  }`}>
+                    {classifyVideo(selectedVideo.title, selectedVideo.folder_path || "", selectedVideo.duration_seconds).categoryLabel}
+                  </span>
+                </div>
+
                 <h3 className="text-lg font-bold text-white">{selectedVideo.title}</h3>
+
+                {/* Location Breadcrumb */}
                 <div className="mt-2 p-2.5 rounded-lg bg-[#131B2E] border border-[#1E293B] text-xs space-y-1">
                   <span className="text-[10px] uppercase font-bold text-[#64748B] tracking-wider block">
                     Current Location / Folder Breadcrumb
@@ -938,7 +1155,7 @@ export default function VideoDatabasePage() {
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
-                  {selectedVideo.source === "youtube" ? "Watch on YouTube" : "Open in Google Drive"}
+                  {selectedVideo.source === "youtube" ? "Open on YouTube" : "Open in Google Drive"}
                 </a>
                 <button
                   onClick={() => handleCopy(selectedVideo.direct_url, "drawer-btn")}
@@ -948,9 +1165,29 @@ export default function VideoDatabasePage() {
                 </button>
               </div>
 
+              {/* Content Creation & Repurposing Notes */}
+              <div className="p-3 bg-[#131B2E] rounded-xl border border-[#1E293B] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] uppercase font-bold text-amber-400 tracking-wider">
+                    📝 Editorial Notes &amp; Hook Timestamps
+                  </span>
+                  {drawerNote && <span className="text-[10px] text-emerald-400">Saved</span>}
+                </div>
+                <textarea
+                  value={drawerNote}
+                  onChange={(e) => {
+                    setDrawerNote(e.target.value);
+                    saveNote(selectedVideo.source_id, e.target.value);
+                  }}
+                  placeholder="Jot down content ideas, soundbites, timestamps (e.g. 'At 12:40 Anthony explains breath holding technique for Kilimanjaro')..."
+                  rows={3}
+                  className="w-full bg-[#0B0F17] border border-[#1E293B] rounded-lg p-2.5 text-xs text-white placeholder-[#64748B] focus:outline-none focus:border-blue-500 transition"
+                />
+              </div>
+
               {/* Detailed Metadata Grid */}
               <div className="space-y-3">
-                <h4 className="text-xs uppercase font-bold text-[#94A3B8] tracking-wider">Metadata Breakdown</h4>
+                <h4 className="text-xs uppercase font-bold text-[#94A3B8] tracking-wider">Asset Specifications</h4>
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="bg-[#131B2E] p-3 rounded-lg border border-[#1E293B]">
                     <span className="text-[10px] text-[#64748B] uppercase font-semibold block">Platform</span>
@@ -981,9 +1218,9 @@ export default function VideoDatabasePage() {
                   </div>
 
                   <div className="bg-[#131B2E] p-3 rounded-lg border border-[#1E293B]">
-                    <span className="text-[10px] text-[#64748B] uppercase font-semibold block">Live Status</span>
+                    <span className="text-[10px] text-[#64748B] uppercase font-semibold block">Broadcast Type</span>
                     <span className="text-white font-medium mt-0.5 capitalize block">
-                      {selectedVideo.is_live ? "Live Broadcast" : "Regular Video"}
+                      {selectedVideo.is_live ? "Live Broadcast" : "Standard Video"}
                     </span>
                   </div>
 

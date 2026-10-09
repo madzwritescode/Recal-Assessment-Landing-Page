@@ -63,3 +63,21 @@ export async function getYouTubeTokens(): Promise<StoredTokens | null> {
 
   return null;
 }
+
+export async function deleteYouTubeTokens(): Promise<void> {
+  // 1. Delete from Supabase
+  try {
+    await supabase.from('recal_settings').delete().eq('key', 'youtube_oauth_tokens');
+  } catch (err) {
+    console.warn('Could not delete tokens from Supabase recal_settings table:', err);
+  }
+
+  // 2. Delete local file
+  try {
+    if (fs.existsSync(TOKEN_FILE)) {
+      fs.unlinkSync(TOKEN_FILE);
+    }
+  } catch (err) {
+    console.error('Failed to delete local token file:', err);
+  }
+}
