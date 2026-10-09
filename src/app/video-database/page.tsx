@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
 import { RecalVideoRecord } from "@/lib/supabase";
 import { classifyVideo } from "@/lib/video-sync/classifier";
 
@@ -341,13 +342,13 @@ export default function VideoDatabasePage() {
       <header className="border-b border-[#1E293B] bg-[#0E1526]/80 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <a href="/" className="flex items-center hover:opacity-90 transition">
+            <Link href="/" className="flex items-center hover:opacity-90 transition">
               <img
                 src="/recal-logo-white.png"
                 alt="Recal"
                 className="h-8 sm:h-9 w-auto object-contain"
               />
-            </a>
+            </Link>
             <div className="h-7 w-px bg-[#1E293B] hidden sm:block"></div>
             <div>
               <div className="flex items-center gap-2">
