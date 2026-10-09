@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getOAuth2Client } from '@/lib/video-sync/youtube-harvester';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     const host = request.headers.get('host') || 'localhost:3001';

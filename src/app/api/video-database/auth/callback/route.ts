@@ -3,6 +3,8 @@ import { getOAuth2Client } from '@/lib/video-sync/youtube-harvester';
 import { saveYouTubeTokens } from '@/lib/video-sync/token-store';
 import { google } from 'googleapis';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
