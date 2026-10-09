@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: scopes,
-      prompt: 'consent', // Ensure refresh_token is always returned
+      prompt: 'select_account consent', // Force account/channel picker and refresh token
     });
 
     return NextResponse.redirect(authUrl);
