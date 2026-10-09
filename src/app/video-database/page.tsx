@@ -392,6 +392,13 @@ export default function VideoDatabasePage() {
               </a>
             )}
 
+            {/* Last Synced Indicator */}
+            {lastSyncedAt && (
+              <span className="text-[11px] text-[#64748B] hidden xl:inline">
+                Last synced: {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+
             {/* Export CSV */}
             <button
               onClick={handleExportCsv}
@@ -405,29 +412,23 @@ export default function VideoDatabasePage() {
               Export CSV
             </button>
 
-            {/* Sync Now Button & Last Synced */}
-            <div className="flex items-center gap-2">
-              {lastSyncedAt && (
-                <span className="text-[11px] text-[#64748B] hidden xl:inline">
-                  Last synced: {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-              <button
-                onClick={handleTriggerSync}
-                disabled={syncing}
-                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-md shadow-blue-500/25 transition disabled:opacity-60 cursor-pointer"
+            {/* Sync Database Button */}
+            <button
+              onClick={handleTriggerSync}
+              disabled={syncing}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-md shadow-blue-500/25 transition disabled:opacity-60 cursor-pointer"
+              title="Sync video database with Google Drive & YouTube"
+            >
+              <svg
+                className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
               >
-                <svg
-                  className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                {syncing ? "Syncing..." : "Sync Database Now"}
-              </button>
-            </div>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {syncing ? "Syncing..." : "Sync Database"}
+            </button>
           </div>
         </div>
 
