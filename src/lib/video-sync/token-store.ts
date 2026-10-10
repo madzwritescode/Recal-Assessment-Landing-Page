@@ -18,11 +18,14 @@ export interface StoredTokens {
 export async function saveYouTubeTokens(tokens: StoredTokens): Promise<void> {
   // 1. Try to persist into Supabase (if table exists)
   try {
-    await supabase.from('recal_settings').upsert({
+    const { error } = await supabase.from('recal_settings').upsert({
       key: 'youtube_oauth_tokens',
       value: JSON.stringify(tokens),
       updated_at: new Date().toISOString(),
     });
+    if (error) {
+      console.warn('Could not save tokens to Supabase recal_settings table (table may need to be created):', error.message);
+    }
   } catch (err) {
     console.warn('Could not save tokens to Supabase recal_settings table:', err);
   }

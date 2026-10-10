@@ -237,18 +237,32 @@ export default function VideoDatabasePage() {
 
       if (res.ok && data.success) {
         const report = data.report;
-        const driveCount = report.drive.totalVideos;
-        const ytCount = report.youtube.totalVideos;
+        const driveCount = report?.drive?.totalVideos || 0;
+        const ytCount = report?.youtube?.totalVideos || 0;
+
+        let successMsg = `Sync completed! Discovered ${driveCount} Google Drive videos and ${ytCount} YouTube videos in ${(report?.durationMs / 1000).toFixed(1)}s.`;
+        if (report?.drive?.error && ytCount > 0) {
+          successMsg = `YouTube sync successful (${ytCount} videos synced)! (Note: Google Drive was skipped because Service Account credentials are not set).`;
+        } else if (report?.youtube?.error && driveCount > 0) {
+          successMsg = `Google Drive sync successful (${driveCount} videos synced)! (Note: YouTube error: ${report.youtube.error}).`;
+        }
+
         setSyncMessage({
           type: "success",
-          text: `Sync completed! Discovered ${driveCount} Google Drive videos and ${ytCount} YouTube videos in ${(report.durationMs / 1000).toFixed(1)}s.`,
+          text: successMsg,
         });
         await fetchStatus();
         await fetchVideos();
       } else {
+        const errMsg =
+          data.error ||
+          (data.report?.youtube?.error && data.report?.drive?.error
+            ? `YouTube: ${data.report.youtube.error} | Drive: ${data.report.drive.error}`
+            : data.report?.youtube?.error || data.report?.drive?.error) ||
+          "Unknown error";
         setSyncMessage({
           type: "error",
-          text: `Sync error: ${data.error || data.report?.drive?.error || "Unknown error"}`,
+          text: `Sync error: ${errMsg}`,
         });
       }
     } catch (err: unknown) {
