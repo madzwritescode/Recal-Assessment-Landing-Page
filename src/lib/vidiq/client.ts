@@ -7,16 +7,16 @@
 
 const VIDIQ_ENDPOINT = 'https://mcp.vidiq.com/mcp';
 
-export interface VidIQToolCallResponse<T = any> {
+export interface VidIQToolCallResponse<T = unknown> {
   result?: {
     content?: Array<{ type: string; text?: string }>;
     structuredContent?: T;
-    _meta?: any;
+    _meta?: Record<string, unknown>;
   };
   error?: {
     code: number;
     message: string;
-    data?: any;
+    data?: unknown;
   };
 }
 
@@ -56,9 +56,9 @@ export interface VidIQVideoItem {
 /**
  * Execute a low-level tool call against the vidIQ MCP API
  */
-export async function callVidIQTool<T = any>(
+export async function callVidIQTool<T = unknown>(
   toolName: string,
-  args: Record<string, any> = {}
+  args: Record<string, unknown> = {}
 ): Promise<VidIQToolCallResponse<T>> {
   const apiKey = process.env.VIDIQ_API_KEY || 'vidiq_ii7QOdnF6Pps_JJtPDwAbXYHPq5yNcG9AzQ3aVdT';
 
@@ -156,7 +156,7 @@ export async function getVidIQUserVideos(
   limit = 50,
   nextPageToken?: string
 ): Promise<{ channelId: string; videos: VidIQVideoItem[]; nextPageToken?: string }> {
-  const args: Record<string, any> = { channelId, limit };
+  const args: Record<string, unknown> = { channelId, limit };
   if (nextPageToken) args.nextPageToken = nextPageToken;
 
   const res = await callVidIQTool<{
@@ -173,13 +173,20 @@ export async function getVidIQUserVideos(
  */
 export async function scoreVidIQTitle(
   title: string,
-  options: {
-    type?: 'long' | 'short';
-    videoId?: string;
-    channelId?: string;
-  } = {}
+  optionsOrVideoId:
+    | string
+    | {
+        type?: 'long' | 'short';
+        videoId?: string;
+        channelId?: string;
+      } = {}
 ) {
-  const args: Record<string, any> = {
+  const options =
+    typeof optionsOrVideoId === 'string'
+      ? { videoId: optionsOrVideoId }
+      : optionsOrVideoId;
+
+  const args: Record<string, unknown> = {
     title,
     type: options.type || 'long',
     channelId: options.channelId || process.env.VIDIQ_DEFAULT_CHANNEL_ID || 'UCoZzl3VZCgvwvPqT33KiMGQ',
@@ -193,7 +200,7 @@ export async function scoreVidIQTitle(
  * Score a thumbnail URL
  */
 export async function scoreVidIQThumbnail(thumbnailUrl: string, title?: string) {
-  const args: Record<string, any> = { thumbnailUrl };
+  const args: Record<string, unknown> = { thumbnailUrl };
   if (title) args.title = title;
   const res = await callVidIQTool('vidiq_score_thumbnail', args);
   return extractStructured(res);

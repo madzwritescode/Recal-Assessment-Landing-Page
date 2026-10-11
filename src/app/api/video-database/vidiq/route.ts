@@ -23,15 +23,15 @@ export async function GET() {
     let balanceError = null;
     try {
       balance = await getVidIQBalance();
-    } catch (e: any) {
-      balanceError = e.message;
+    } catch (e) {
+      balanceError = e instanceof Error ? e.message : String(e);
     }
 
     // 2. Fetch authorized channels
     let channels = null;
     try {
       channels = await getVidIQUserChannels();
-    } catch (e: any) {
+    } catch {
       // ignore channel fetch error if balance succeeded
     }
 
@@ -60,10 +60,10 @@ export async function GET() {
       error: balanceError,
       dbSettings: integrationData,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error in vidIQ API route:', err);
     return NextResponse.json(
-      { error: err.message || 'Internal server error' },
+      { error: err instanceof Error ? err.message : 'Internal server error' },
       { status: 500 }
     );
   }
@@ -148,10 +148,10 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error executing vidIQ action:', err);
     return NextResponse.json(
-      { error: err.message || 'Error processing request' },
+      { error: err instanceof Error ? err.message : 'Error processing request' },
       { status: 500 }
     );
   }
