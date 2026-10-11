@@ -42,6 +42,19 @@ export default function VideoDatabasePage() {
   const [youtubeConnected, setYoutubeConnected] = useState<boolean>(false);
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  // VidIQ Connection state
+  const [vidiqConnected, setVidiqConnected] = useState<boolean>(false);
+  const [vidiqCredits, setVidiqCredits] = useState<number | null>(null);
+
+  // VidIQ Drawer Tool states
+  const [vidiqScoreLoading, setVidiqScoreLoading] = useState<boolean>(false);
+  const [vidiqTitleScore, setVidiqTitleScore] = useState<number | null>(null);
+  const [vidiqTitlesLoading, setVidiqTitlesLoading] = useState<boolean>(false);
+  const [vidiqSuggestedTitles, setVidiqSuggestedTitles] = useState<Array<{ title: string; score: number }>>([]);
+  const [vidiqTranscriptLoading, setVidiqTranscriptLoading] = useState<boolean>(false);
+  const [vidiqTranscript, setVidiqTranscript] = useState<string | null>(null);
+  const [transcriptSearch, setTranscriptSearch] = useState<string>("");
+  const [vidiqToolError, setVidiqToolError] = useState<string | null>(null);
 
   // Filters & Search
   const [search, setSearch] = useState<string>("");
@@ -89,6 +102,18 @@ export default function VideoDatabasePage() {
         setYoutubeConnected(data.youtubeConnected);
         setChannelTitle(data.channelTitle);
         setLastSyncedAt(data.lastSyncedAt);
+      }
+
+      // Fetch VidIQ integration status & balance
+      const vidiqRes = await fetch("/api/video-database/vidiq");
+      if (vidiqRes.ok) {
+        const vData = await vidiqRes.json();
+        setVidiqConnected(vData.connected);
+        if (vData.balance?.totalCredits !== undefined) {
+          setVidiqCredits(vData.balance.totalCredits);
+        } else if (vData.dbSettings?.total_credits !== undefined) {
+          setVidiqCredits(vData.dbSettings.total_credits);
+        }
       }
     } catch (err) {
       console.error("Error fetching sync status:", err);
@@ -205,6 +230,11 @@ export default function VideoDatabasePage() {
     if (selectedVideo) {
       setDrawerNote(notesMap[selectedVideo.source_id] || "");
     }
+    setVidiqTitleScore(null);
+    setVidiqSuggestedTitles([]);
+    setVidiqTranscript(null);
+    setTranscriptSearch("");
+    setVidiqToolError(null);
   }, [selectedVideo, notesMap]);
 
   // Filter videos locally by Orientation & Category & Starred
@@ -282,6 +312,120 @@ export default function VideoDatabasePage() {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // VidIQ Action Handlers
+  const handleScoreTitle = async () => {
+    if (!selectedVideo) return;
+    setVidiqScoreLoading(true);
+    setVidiqToolError(null);
+    try {
+      const res = await fetch("/api/video-database/vidiq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "score_title",
+          payload: {
+            title: selectedVideo.title,
+            videoId: selectedVideo.source_id,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.result?.score !== undefined) {
+        setVidiqTitleScore(data.result.score);
+      } else if (data.error) {
+        setVidiqToolError(data.error);
+      }
+    } catch (err: unknown) {
+      setVidiqToolError(err instanceof Error ? err.message : "Failed to score title");
+    } finally {
+      setVidiqScoreLoading(false);
+    }
+  };
+
+  const handleGenerateTitles = async () => {
+    if (!selectedVideo) return;
+    setVidiqTitlesLoading(true);
+    setVidiqToolError(null);
+    try {
+      const res = await fetch("/api/video-database/vidiq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "generate_titles",
+          payload: {
+            title: selectedVideo.title,
+            videoId: selectedVideo.source_id,
+          },
+        }),
+      });
+      const data = await res.json();
+      let titles = data.result?.structuredContent?.titles || data.result?.titles || [];
+      if (!titles.length && data.result?.result?.content?.[0]?.text) {
+        try {
+          const parsed = JSON.parse(data.result.result.content[0].text);
+          if (parsed.titles) titles = parsed.titles;
+        } catch {}
+      }
+      if (titles.length > 0) {
+        setVidiqSuggestedTitles(titles);
+      } else if (data.error) {
+        setVidiqToolError(data.error);
+      }
+    } catch (err: unknown) {
+      setVidiqToolError(err instanceof Error ? err.message : "Failed to generate titles");
+    } finally {
+      setVidiqTitlesLoading(false);
+    }
+  };
+
+  const handleFetchTranscript = async () => {
+    if (!selectedVideo) return;
+    setVidiqTranscriptLoading(true);
+    setVidiqToolError(null);
+    try {
+      const res = await fetch("/api/video-database/vidiq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "transcript",
+          payload: {
+            videoId: selectedVideo.source_id,
+          },
+        }),
+      });
+      const data = await res.json();
+      let transcription = data.result?.structuredContent?.transcription || data.result?.transcription;
+      if (!transcription && data.result?.content?.[0]?.text) {
+        try {
+          const parsed = JSON.parse(data.result.content[0].text);
+          transcription = parsed.transcription;
+        } catch {
+          transcription = data.result.content[0].text;
+        }
+      }
+      if (!transcription && data.result?.result?.content?.[0]?.text) {
+        try {
+          const parsed = JSON.parse(data.result.result.content[0].text);
+          transcription = parsed.transcription;
+        } catch {
+          transcription = data.result.result.content[0].text;
+        }
+      }
+
+      if (transcription) {
+        setVidiqTranscript(transcription);
+      } else if (data.error) {
+        setVidiqToolError(data.error);
+      } else {
+        setVidiqToolError("No transcript found for this video.");
+      }
+    } catch (err: unknown) {
+      setVidiqToolError(err instanceof Error ? err.message : "Failed to fetch transcript");
+    } finally {
+      setVidiqTranscriptLoading(false);
+    }
   };
 
   // Export filtered dataset to CSV
@@ -404,6 +548,14 @@ export default function VideoDatabasePage() {
                 </svg>
                 Connect YouTube Studio
               </a>
+            )}
+
+            {/* VidIQ Status Badge */}
+            {vidiqConnected && (
+              <div className="flex items-center gap-1.5 bg-[#131B2E] border border-blue-500/20 rounded-lg px-2.5 py-1 text-xs text-blue-400 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+                <span>⚡ VidIQ: {vidiqCredits !== null ? `${vidiqCredits.toLocaleString()} cr` : "Connected"}</span>
+              </div>
             )}
 
             {/* Last Synced Indicator */}
@@ -1202,6 +1354,127 @@ export default function VideoDatabasePage() {
                   className="w-full bg-[#0B0F17] border border-[#1E293B] rounded-lg p-2.5 text-xs text-white placeholder-[#64748B] focus:outline-none focus:border-blue-500 transition"
                 />
               </div>
+
+              {/* VidIQ AI Content & Growth Tools (YouTube Videos) */}
+              {selectedVideo.source === "youtube" && (
+                <div className="p-3.5 bg-[#131B2E] rounded-xl border border-blue-500/30 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] uppercase font-bold text-blue-400 tracking-wider flex items-center gap-1">
+                        ⚡ VidIQ AI Optimization &amp; Transcript
+                      </span>
+                    </div>
+                    {vidiqCredits !== null && (
+                      <span className="text-[10px] text-[#64748B] font-mono">
+                        {vidiqCredits.toLocaleString()} credits pool
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Title CTR Optimization Card */}
+                  <div className="p-3 bg-[#0B0F17] rounded-lg border border-[#1E293B] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-white">Title CTR &amp; Hook Strength</span>
+                      {vidiqTitleScore !== null && (
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${
+                          vidiqTitleScore >= 80 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                          vidiqTitleScore >= 60 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                          'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        }`}>
+                          Score: {vidiqTitleScore}/100
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleScoreTitle}
+                        disabled={vidiqScoreLoading}
+                        className="flex-1 py-1.5 px-2.5 rounded bg-[#1E293B] hover:bg-[#334155] text-xs font-medium text-slate-200 transition disabled:opacity-50"
+                      >
+                        {vidiqScoreLoading ? "Analyzing..." : "Score Title"}
+                      </button>
+                      <button
+                        onClick={handleGenerateTitles}
+                        disabled={vidiqTitlesLoading}
+                        className="flex-1 py-1.5 px-2.5 rounded bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white shadow transition disabled:opacity-50"
+                      >
+                        {vidiqTitlesLoading ? "Generating..." : "✨ Generate 3 Better Titles"}
+                      </button>
+                    </div>
+
+                    {/* Suggested Titles List */}
+                    {vidiqSuggestedTitles.length > 0 && (
+                      <div className="mt-2.5 space-y-2 pt-2 border-t border-[#1E293B]">
+                        <span className="text-[10px] uppercase font-bold text-[#64748B] tracking-wider block">
+                          High-CTR Suggested Alternatives:
+                        </span>
+                        {vidiqSuggestedTitles.map((t, idx) => (
+                          <div key={idx} className="p-2 rounded bg-[#131B2E] border border-[#1E293B] flex items-center justify-between gap-2 text-xs">
+                            <span className="text-white flex-1 font-medium">{t.title}</span>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className="text-emerald-400 font-mono font-bold text-[11px]">{t.score}/100</span>
+                              <button
+                                onClick={() => handleCopy(t.title, `title-${idx}`)}
+                                className="px-2 py-0.5 rounded bg-[#1E293B] hover:bg-[#334155] text-[10px] text-slate-300 transition"
+                              >
+                                {copiedId === `title-${idx}` ? "Copied!" : "Copy"}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Video Transcript & Hook Miner Card */}
+                  <div className="p-3 bg-[#0B0F17] rounded-lg border border-[#1E293B] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-white">Full Transcript &amp; Hook Miner</span>
+                      {!vidiqTranscript && (
+                        <button
+                          onClick={handleFetchTranscript}
+                          disabled={vidiqTranscriptLoading}
+                          className="py-1 px-3 rounded bg-indigo-600/90 hover:bg-indigo-600 text-xs font-medium text-white transition disabled:opacity-50"
+                        >
+                          {vidiqTranscriptLoading ? "Extracting..." : "📄 Fetch Transcript"}
+                        </button>
+                      )}
+                    </div>
+
+                    {vidiqTranscript && (
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={transcriptSearch}
+                            onChange={(e) => setTranscriptSearch(e.target.value)}
+                            placeholder="Filter transcript (e.g. 'breathwork', 'Kilimanjaro')..."
+                            className="flex-1 bg-[#131B2E] border border-[#1E293B] rounded p-1.5 text-xs text-white placeholder-[#64748B] focus:outline-none"
+                          />
+                          <button
+                            onClick={() => handleCopy(vidiqTranscript, 'transcript-all')}
+                            className="px-2 py-1 bg-[#1E293B] hover:bg-[#334155] rounded text-xs text-slate-200 transition"
+                          >
+                            {copiedId === 'transcript-all' ? "Copied!" : "Copy All"}
+                          </button>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto p-2.5 bg-[#131B2E] rounded border border-[#1E293B] text-[11px] text-slate-300 leading-relaxed font-sans select-text whitespace-pre-wrap">
+                          {transcriptSearch
+                            ? vidiqTranscript.split('. ').filter(l => l.toLowerCase().includes(transcriptSearch.toLowerCase())).join('. \n\n') || "No matching segments found."
+                            : vidiqTranscript}
+                        </div>
+                      </div>
+                    )}
+
+                    {vidiqToolError && (
+                      <p className="text-[11px] text-rose-400 bg-rose-950/30 p-2 rounded border border-rose-900/40">
+                        {vidiqToolError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Detailed Metadata Grid */}
               <div className="space-y-3">
