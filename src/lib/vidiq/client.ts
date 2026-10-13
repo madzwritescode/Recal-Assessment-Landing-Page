@@ -257,6 +257,7 @@ export async function getVidIQOutliers(
     limit: options.limit || 20,
     contentType: options.contentType || 'long',
     language: options.language || 'en',
+    requireAllTitleTerms: true,
   };
   if (keyword) args.keyword = keyword;
   if (options.publishedWithin) args.publishedWithin = options.publishedWithin;

@@ -1595,12 +1595,11 @@ export default function VideoDatabasePage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] uppercase font-bold text-[#64748B] tracking-wider">Quick Topics:</span>
                 {[
-                  "High Altitude Breathwork",
-                  "Kilimanjaro Preparation",
-                  "Oxygen Advantage",
-                  "Breathing for Runners",
-                  "Wim Hof Altitude",
-                  "Everest Base Camp Training",
+                  "Kilimanjaro Breathwork",
+                  "High Altitude Training",
+                  "Hypoxia & Breath Hold",
+                  "Oxygen Advantage Altitude",
+                  "Altitude Sickness Prevention",
                 ].map((chip) => (
                   <button
                     key={chip}
@@ -1657,11 +1656,11 @@ export default function VideoDatabasePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
                   {outliersList.map((item, idx) => {
                     const videoId = (item.videoId || item.id || "") as string;
-                    const title = (item.title || "Untitled Video") as string;
+                    const title = (item.title || item.videoTitle || "Video") as string;
                     const channelTitle = (item.channelTitle || item.creatorTitle || "") as string;
                     const viewCount = (item.viewCount || item.views || 0) as number;
                     const breakoutScore = Number(item.breakoutScore || item.outlierScore || 2.5);
-                    const thumbUrl = (item.thumbnailUrl || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "")) as string;
+                    const thumbUrl = (item.thumbnailUrl || item.videoThumbnail || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "")) as string;
                     const vph = (item.vph || item.viewsPerHour || 0) as number;
 
                     return (

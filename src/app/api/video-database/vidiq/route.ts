@@ -179,12 +179,44 @@ export async function POST(req: NextRequest) {
 
       case 'outliers': {
         const { keyword, limit, contentType, publishedWithin } = payload || {};
-        const result = await getVidIQOutliers(keyword, {
-          limit: limit ? parseInt(limit, 10) : 20,
+        const rawResult = (await getVidIQOutliers(keyword, {
+          limit: limit ? parseInt(limit, 10) : 25,
           contentType: contentType || 'long',
           publishedWithin: publishedWithin || 'oneYear',
+        })) as Record<string, unknown>;
+
+        // Extract and normalize video list
+        const rawVideos = (Array.isArray(rawResult?.videos) ? rawResult.videos : []) as Array<Record<string, unknown>>;
+
+        // Strict Safety & Relevance filter (block NSFW, clickbait, adult, bikini, etc.)
+        const unsafeRegex = /\b(porn|nsfw|sex|sexy|erotic|nude|naked|bikini|onlyfans|hot tub|swimsuit|babe|fetish|escort)\b/i;
+
+        const sanitizedVideos = rawVideos
+          .filter((v) => {
+            const title = String(v.videoTitle || v.title || '');
+            const tags = Array.isArray(v.videoTags) ? v.videoTags.join(' ') : '';
+            return !unsafeRegex.test(title) && !unsafeRegex.test(tags);
+          })
+          .map((v) => ({
+            ...v,
+            videoId: v.videoId || v.id,
+            title: v.videoTitle || v.title || 'Video',
+            thumbnailUrl:
+              v.videoThumbnail ||
+              v.thumbnailUrl ||
+              (v.videoId ? `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg` : ''),
+            channelTitle: v.channelTitle || v.creatorTitle || 'Creator',
+            viewCount: v.viewCount || v.views || 0,
+            breakoutScore: Number(v.breakoutScore || v.outlierScore || 2.0),
+            vph: Number(v.vph || v.viewsPerHour || 0),
+          }));
+
+        return NextResponse.json({
+          result: {
+            ...rawResult,
+            videos: sanitizedVideos,
+          },
         });
-        return NextResponse.json({ result });
       }
 
       case 'generate_chapters': {
