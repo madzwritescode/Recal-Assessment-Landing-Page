@@ -1,25 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { google } from 'googleapis';
+import { getDriveClient } from '@/lib/video-sync/drive-credentials';
 
 export const dynamic = 'force-dynamic';
-
-function getDriveClient() {
-  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-
-  if (!clientEmail || !privateKey) {
-    throw new Error('Missing Google Service Account credentials.');
-  }
-
-  const auth = new google.auth.JWT({
-    email: clientEmail,
-    key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  });
-
-  return google.drive({ version: 'v3', auth });
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -66,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if video exists in Drive
-    const drive = getDriveClient();
+    const drive = await getDriveClient();
     const fileMeta = await drive.files.get({
       fileId: videoId,
       supportsAllDrives: true,

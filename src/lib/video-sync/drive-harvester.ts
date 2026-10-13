@@ -1,30 +1,16 @@
-import { google, drive_v3 } from 'googleapis';
+import { drive_v3 } from 'googleapis';
 import { RecalVideoRecord } from '../supabase';
 import { formatDuration, formatFileSize } from './formatters';
+import { getDriveClient, getGoogleDriveCredentials } from './drive-credentials';
 
-const ROOT_FOLDER_ID = process.env.GOOGLE_DRIVE_MARKETING_FOLDER_ID || '1SIHLo8DE7_YBXhxglXcAtfo8Ga8c_xp-';
-
-function getDriveClient() {
-  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-
-  if (!clientEmail || !privateKey) {
-    throw new Error('Missing Google Service Account credentials in environment variables.');
-  }
-
-  const auth = new google.auth.JWT({
-    email: clientEmail,
-    key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  });
-
-  return google.drive({ version: 'v3', auth });
-}
+const DEFAULT_ROOT_FOLDER_ID = '1SIHLo8DE7_YBXhxglXcAtfo8Ga8c_xp-';
 
 export async function harvestGoogleDriveVideos(
   onProgress?: (msg: string) => void
 ): Promise<{ videos: RecalVideoRecord[]; totalFoldersScanned: number }> {
-  const drive = getDriveClient();
+  const creds = await getGoogleDriveCredentials();
+  const rootFolderId = creds?.folderId || process.env.GOOGLE_DRIVE_MARKETING_FOLDER_ID || DEFAULT_ROOT_FOLDER_ID;
+  const drive = await getDriveClient();
   const collectedVideos: RecalVideoRecord[] = [];
   let totalFolders = 0;
 
@@ -99,7 +85,7 @@ export async function harvestGoogleDriveVideos(
   }
 
   if (onProgress) onProgress('Starting deep scan of Recal Marketing folder tree...');
-  await crawlFolder(ROOT_FOLDER_ID, 'Recal Marketing');
+  await crawlFolder(rootFolderId, 'Recal Marketing');
 
   if (onProgress) onProgress(`Crawl complete: Discovered ${collectedVideos.length} videos across ${totalFolders} folders.`);
 

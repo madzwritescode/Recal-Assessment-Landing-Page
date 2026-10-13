@@ -1898,6 +1898,27 @@ export default function VideoDatabasePage() {
                 )}
               </div>
 
+              {/* Google Drive Stream Notice & Direct Link */}
+              {selectedVideo.source === "gdrive" && (
+                <div className="p-3 rounded-lg bg-[#0B132B]/80 border border-indigo-900/40 text-xs flex items-center justify-between gap-3">
+                  <div className="text-[#94A3B8] leading-relaxed">
+                    <span className="text-amber-400 font-semibold mr-1">Google Drive:</span>
+                    If the player prompts to <em>Sign in</em>, your browser blocks 3rd-party cookies in embeds. Click <em>Sign in</em> once to play in the popup or open directly in Drive.
+                  </div>
+                  <a
+                    href={selectedVideo.direct_url || `https://drive.google.com/file/d/${selectedVideo.source_id}/view`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 font-medium border border-emerald-500/20 flex items-center gap-1.5 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    Open in Drive
+                  </a>
+                </div>
+              )}
+
               {/* Title & Classification Badges */}
               <div>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">

@@ -2,6 +2,7 @@ import { supabase } from '../supabase';
 import { harvestGoogleDriveVideos } from './drive-harvester';
 import { harvestYouTubeVideos } from './youtube-harvester';
 import { getYouTubeTokens } from './token-store';
+import { getGoogleDriveCredentials } from './drive-credentials';
 
 export interface SyncReport {
   success: boolean;
@@ -39,12 +40,10 @@ export async function runFullVideoSync(
   };
 
   // 1. Sync Google Drive
-  const hasDriveCreds = Boolean(
-    process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY
-  );
+  const driveCreds = await getGoogleDriveCredentials();
 
-  if (!hasDriveCreds) {
-    report.drive.error = 'Google Drive skipped: Missing Service Account credentials in environment variables.';
+  if (!driveCreds) {
+    report.drive.error = 'Google Drive skipped: Missing Service Account credentials.';
     if (onProgress) onProgress('Google Drive credentials not found; skipping Drive scan.');
   } else {
     try {
@@ -171,7 +170,7 @@ export async function runFullVideoSync(
   report.totalVideosInDatabase = count || 0;
   report.durationMs = Date.now() - startTime;
 
-  const driveOk = hasDriveCreds && !report.drive.error;
+  const driveOk = Boolean(driveCreds) && !report.drive.error;
   const ytOk = report.youtube.connected && !report.youtube.error;
 
   // Sync is considered successful if at least one service completed successfully,
