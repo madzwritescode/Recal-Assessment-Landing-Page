@@ -16,6 +16,8 @@ export async function GET(request: Request) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(200, Math.max(10, parseInt(searchParams.get('limit') || '50', 10)));
 
+    const searchMode = searchParams.get('search_mode') || 'all'; // 'all', 'metadata', 'transcript'
+
     let query = supabase.from('recal_videos').select('*', { count: 'exact' });
 
     // Status filter (active, deleted, etc.)
@@ -55,10 +57,16 @@ export async function GET(request: Request) {
       query = query.gt('duration_seconds', 3600);
     }
 
-    // Search query across title and folder_path
+    // Search query across title, description, folder_path, and spoken transcript
     if (search.trim()) {
       const term = `%${search.trim()}%`;
-      query = query.or(`title.ilike.${term},folder_path.ilike.${term},description.ilike.${term}`);
+      if (searchMode === 'transcript') {
+        query = query.ilike('transcript', term);
+      } else if (searchMode === 'metadata') {
+        query = query.or(`title.ilike.${term},folder_path.ilike.${term},description.ilike.${term}`);
+      } else {
+        query = query.or(`title.ilike.${term},folder_path.ilike.${term},description.ilike.${term},transcript.ilike.${term}`);
+      }
     }
 
     // Sorting
@@ -92,12 +100,53 @@ export async function GET(request: Request) {
     const to = from + limit - 1;
     query = query.range(from, to);
 
-    const { data: videos, count, error } = await query;
+    let { data: videos, count, error } = await query;
+
+    // Graceful fallback if transcript column does not exist yet
+    if (error && error.message.toLowerCase().includes('transcript')) {
+      console.warn('Transcript column pending migration, falling back to metadata search.');
+      let fallbackQuery = supabase.from('recal_videos').select('*', { count: 'exact' });
+      if (status !== 'all') fallbackQuery = fallbackQuery.eq('status', status);
+      if (source !== 'all') fallbackQuery = fallbackQuery.eq('source', source);
+      if (privacy !== 'all') fallbackQuery = fallbackQuery.eq('privacy_status', privacy);
+      if (isLive === 'true') fallbackQuery = fallbackQuery.eq('is_live', true);
+      else if (isLive === 'false') fallbackQuery = fallbackQuery.eq('is_live', false);
+      if (search.trim()) {
+        const term = `%${search.trim()}%`;
+        fallbackQuery = fallbackQuery.or(`title.ilike.${term},folder_path.ilike.${term},description.ilike.${term}`);
+      }
+      const fallbackRes = await fallbackQuery.order('published_at', { ascending: false }).range(from, to);
+      videos = fallbackRes.data;
+      count = fallbackRes.count;
+      error = fallbackRes.error;
+    }
 
     if (error) {
       console.error('Error fetching videos from Supabase:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Enrich results with transcript highlight snippets
+    const enrichedVideos = (videos || []).map((v: Record<string, unknown>) => {
+      let matchSnippet: string | null = null;
+      if (search.trim() && typeof v.transcript === 'string') {
+        const queryTerm = search.trim().toLowerCase();
+        const transcriptLower = v.transcript.toLowerCase();
+        const idx = transcriptLower.indexOf(queryTerm);
+        if (idx !== -1) {
+          const start = Math.max(0, idx - 60);
+          const end = Math.min(v.transcript.length, idx + queryTerm.length + 80);
+          const prefix = start > 0 ? '...' : '';
+          const suffix = end < v.transcript.length ? '...' : '';
+          matchSnippet = `${prefix}${v.transcript.slice(start, end).trim()}${suffix}`;
+        }
+      }
+      return {
+        ...v,
+        transcript_match_snippet: matchSnippet,
+        has_transcript: Boolean(v.transcript),
+      };
+    });
 
     // Calculate Exact Counts across all active records
     const [
@@ -138,7 +187,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      videos: videos || [],
+      videos: enrichedVideos || [],
       pagination: {
         page,
         limit,

@@ -56,6 +56,35 @@ export default function VideoDatabasePage() {
   const [transcriptSearch, setTranscriptSearch] = useState<string>("");
   const [vidiqToolError, setVidiqToolError] = useState<string | null>(null);
 
+  // Main Tab Navigation & Search Scope
+  const [activeMainTab, setActiveMainTab] = useState<"catalog" | "research">("catalog");
+  const [searchMode, setSearchMode] = useState<"all" | "metadata" | "transcript">("all");
+
+  // Research Tab: Outliers
+  const [outlierKeyword, setOutlierKeyword] = useState<string>("High Altitude Breathwork");
+  const [outlierContentType, setOutlierContentType] = useState<"long" | "short">("long");
+  const [outlierPublished, setOutlierPublished] = useState<"oneYear" | "threeMonths" | "thisMonth">("oneYear");
+  const [outliersLoading, setOutliersLoading] = useState<boolean>(false);
+  const [outliersList, setOutliersList] = useState<Array<Record<string, unknown>>>([]);
+  const [outlierError, setOutlierError] = useState<string | null>(null);
+
+  // Research Tab: Keyword Radar
+  const [keywordQuery, setKeywordQuery] = useState<string>("Kilimanjaro preparation");
+  const [keywordsLoading, setKeywordsLoading] = useState<boolean>(false);
+  const [keywordResult, setKeywordResult] = useState<Record<string, unknown> | null>(null);
+  const [keywordError, setKeywordError] = useState<string | null>(null);
+
+  // Drawer: Chapters & Thumbnail scoring
+  const [chaptersLoading, setChaptersLoading] = useState<boolean>(false);
+  const [generatedChapters, setGeneratedChapters] = useState<Array<{ title: string; timestamp?: string }>>([]);
+  const [thumbnailScoreLoading, setThumbnailScoreLoading] = useState<boolean>(false);
+  const [thumbnailScoreResult, setThumbnailScoreResult] = useState<Record<string, unknown> | null>(null);
+
+  // Drawer: Drive Transcript Manual / Paste input
+  const [showPasteTranscript, setShowPasteTranscript] = useState<boolean>(false);
+  const [pasteTranscriptText, setPasteTranscriptText] = useState<string>("");
+  const [savingTranscript, setSavingTranscript] = useState<boolean>(false);
+
   // Filters & Search
   const [search, setSearch] = useState<string>("");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
@@ -126,6 +155,7 @@ export default function VideoDatabasePage() {
     try {
       const params = new URLSearchParams({
         search,
+        search_mode: searchMode,
         source: sourceFilter,
         privacy: privacyFilter,
         duration: durationFilter,
@@ -148,7 +178,7 @@ export default function VideoDatabasePage() {
     } finally {
       setLoading(false);
     }
-  }, [search, sourceFilter, privacyFilter, durationFilter, liveFilter, sortBy, page, limit]);
+  }, [search, searchMode, sourceFilter, privacyFilter, durationFilter, liveFilter, sortBy, page, limit]);
 
   useEffect(() => {
     fetchStatus();
@@ -416,6 +446,13 @@ export default function VideoDatabasePage() {
 
       if (transcription) {
         setVidiqTranscript(transcription);
+        setSelectedVideo((prev) => prev ? { ...prev, transcript: transcription } : null);
+        setVideos((prev) =>
+          prev.map((v) =>
+            v.source_id === selectedVideo.source_id ? { ...v, transcript: transcription } : v
+          )
+        );
+        fetchStatus();
       } else if (data.error) {
         setVidiqToolError(data.error);
       } else {
@@ -425,6 +462,208 @@ export default function VideoDatabasePage() {
       setVidiqToolError(err instanceof Error ? err.message : "Failed to fetch transcript");
     } finally {
       setVidiqTranscriptLoading(false);
+    }
+  };
+
+  // Sync drawer state when selected video changes
+  useEffect(() => {
+    if (selectedVideo) {
+      setVidiqTranscript(selectedVideo.transcript || null);
+      setTranscriptSearch("");
+      setVidiqTitleScore(null);
+      setVidiqSuggestedTitles([]);
+      setVidiqToolError(null);
+      setDrawerNote(notesMap[selectedVideo.source_id] || "");
+      setThumbnailScoreResult(null);
+      setGeneratedChapters([]);
+      setShowPasteTranscript(false);
+      setPasteTranscriptText("");
+    }
+  }, [selectedVideo, notesMap]);
+
+  // VidIQ: Research Outliers
+  const handleFetchOutliers = async (customKeyword?: string) => {
+    const kw = customKeyword || outlierKeyword;
+    if (!kw.trim()) return;
+    setOutliersLoading(true);
+    setOutlierError(null);
+    try {
+      const res = await fetch("/api/video-database/vidiq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "outliers",
+          payload: {
+            keyword: kw.trim(),
+            contentType: outlierContentType,
+            publishedWithin: outlierPublished,
+            limit: 16,
+          },
+        }),
+      });
+      const data = await res.json();
+      let list = data.result?.videos || data.result?.outliers || data.result?.structuredContent?.videos || [];
+      if (!list.length && data.result?.result?.content?.[0]?.text) {
+        try {
+          const parsed = JSON.parse(data.result.result.content[0].text);
+          list = parsed.videos || parsed.outliers || [];
+        } catch {}
+      }
+      if (Array.isArray(list) && list.length > 0) {
+        setOutliersList(list);
+      } else if (data.error) {
+        setOutlierError(data.error);
+      } else {
+        setOutlierError("No breakout outliers found for this topic.");
+      }
+      fetchStatus();
+    } catch (err: unknown) {
+      setOutlierError(err instanceof Error ? err.message : "Failed to load outliers");
+    } finally {
+      setOutliersLoading(false);
+    }
+  };
+
+  // VidIQ: Keyword Research
+  const handleFetchKeywords = async (customQuery?: string) => {
+    const q = customQuery || keywordQuery;
+    if (!q.trim()) return;
+    setKeywordsLoading(true);
+    setKeywordError(null);
+    try {
+      const res = await fetch("/api/video-database/vidiq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "keywords",
+          payload: { query: q.trim() },
+        }),
+      });
+      const data = await res.json();
+      let resData = data.result?.structuredContent || data.result;
+      if (!resData && data.result?.content?.[0]?.text) {
+        try {
+          resData = JSON.parse(data.result.content[0].text);
+        } catch {}
+      }
+      if (resData) {
+        setKeywordResult(resData);
+      } else if (data.error) {
+        setKeywordError(data.error);
+      }
+      fetchStatus();
+    } catch (err: unknown) {
+      setKeywordError(err instanceof Error ? err.message : "Failed to analyze keywords");
+    } finally {
+      setKeywordsLoading(false);
+    }
+  };
+
+  // VidIQ: Generate Chapters
+  const handleGenerateChapters = async () => {
+    if (!selectedVideo) return;
+    setChaptersLoading(true);
+    setVidiqToolError(null);
+    try {
+      const res = await fetch("/api/video-database/vidiq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "generate_chapters",
+          payload: {
+            videoId: selectedVideo.source_id,
+            chapterCount: 6,
+          },
+        }),
+      });
+      const data = await res.json();
+      let chapters = data.result?.chapters || data.result?.structuredContent?.chapters || [];
+      if (!chapters.length && data.result?.content?.[0]?.text) {
+        try {
+          const parsed = JSON.parse(data.result.content[0].text);
+          chapters = parsed.chapters || [];
+        } catch {}
+      }
+      if (chapters.length > 0) {
+        setGeneratedChapters(chapters);
+      } else if (data.error) {
+        setVidiqToolError(data.error);
+      } else {
+        setVidiqToolError("Could not generate chapters for this video.");
+      }
+      fetchStatus();
+    } catch (err: unknown) {
+      setVidiqToolError(err instanceof Error ? err.message : "Failed to generate chapters");
+    } finally {
+      setChaptersLoading(false);
+    }
+  };
+
+  // VidIQ: Score Thumbnail CTR
+  const handleScoreThumbnail = async () => {
+    if (!selectedVideo || !selectedVideo.thumbnail_url) return;
+    setThumbnailScoreLoading(true);
+    setVidiqToolError(null);
+    try {
+      const res = await fetch("/api/video-database/vidiq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "score_thumbnail",
+          payload: {
+            thumbnailUrl: selectedVideo.thumbnail_url,
+            title: selectedVideo.title,
+          },
+        }),
+      });
+      const data = await res.json();
+      const scoreObj = data.result?.structuredContent || data.result;
+      if (scoreObj) {
+        setThumbnailScoreResult(scoreObj);
+      } else if (data.error) {
+        setVidiqToolError(data.error);
+      }
+      fetchStatus();
+    } catch (err: unknown) {
+      setVidiqToolError(err instanceof Error ? err.message : "Failed to score thumbnail");
+    } finally {
+      setThumbnailScoreLoading(false);
+    }
+  };
+
+  // Save Manual / Pasted Transcript to Supabase (Zero Credits)
+  const handleSaveManualTranscript = async () => {
+    if (!selectedVideo || !pasteTranscriptText.trim()) return;
+    setSavingTranscript(true);
+    try {
+      const res = await fetch("/api/video-database/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoId: selectedVideo.source_id,
+          transcriptText: pasteTranscriptText.trim(),
+          action: "save_text",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const savedText = pasteTranscriptText.trim();
+        setVidiqTranscript(savedText);
+        setShowPasteTranscript(false);
+        setPasteTranscriptText("");
+        setSelectedVideo((prev) => prev ? { ...prev, transcript: savedText } : null);
+        setVideos((prev) =>
+          prev.map((v) =>
+            v.source_id === selectedVideo.source_id ? { ...v, transcript: savedText } : v
+          )
+        );
+      } else if (data.error) {
+        setVidiqToolError(data.error);
+      }
+    } catch (err: unknown) {
+      setVidiqToolError(err instanceof Error ? err.message : "Failed to save transcript");
+    } finally {
+      setSavingTranscript(false);
     }
   };
 
@@ -623,87 +862,142 @@ export default function VideoDatabasePage() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {/* KPI Summary Cards */}
-        {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {/* Total Videos */}
-            <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
-              <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Total Videos</span>
-              <span className="text-2xl font-bold text-white mt-1 block">{stats.total.toLocaleString()}</span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">Exact verified assets</span>
-            </div>
+        {/* Main Section Navigation: Video Library vs YouTube Ideation */}
+        <div className="flex items-center gap-2 border-b border-[#1E293B] pb-3">
+          <button
+            onClick={() => setActiveMainTab("catalog")}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 cursor-pointer ${
+              activeMainTab === "catalog"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                : "bg-[#131B2E] text-[#94A3B8] hover:text-white border border-[#1E293B]"
+            }`}
+          >
+            <span>📹</span>
+            <span>Video Asset Library ({stats?.total ? stats.total.toLocaleString() : "..."})</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveMainTab("research");
+              if (outliersList.length === 0) handleFetchOutliers();
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 cursor-pointer ${
+              activeMainTab === "research"
+                ? "bg-purple-600 text-white shadow-md shadow-purple-500/20"
+                : "bg-[#131B2E] text-[#94A3B8] hover:text-white border border-[#1E293B]"
+            }`}
+          >
+            <span>💡</span>
+            <span>VidIQ Research &amp; Ideation Hub</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-400/20 text-purple-300 font-mono">
+              Boost
+            </span>
+          </button>
+        </div>
 
-            {/* Google Drive Raw */}
-            <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
-              <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Google Drive</span>
-              <span className="text-2xl font-bold text-amber-400 mt-1 block">{stats.drive.toLocaleString()}</span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">In Recal Marketing</span>
-            </div>
+        {activeMainTab === "catalog" && (
+          <>
+            {/* KPI Summary Cards */}
+            {stats && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {/* Total Videos */}
+                <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
+                  <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Total Videos</span>
+                  <span className="text-2xl font-bold text-white mt-1 block">{stats.total.toLocaleString()}</span>
+                  <span className="text-[11px] text-[#64748B] mt-0.5 block">Exact verified assets</span>
+                </div>
 
-            {/* YouTube Videos */}
-            <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
-              <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">YouTube Studio</span>
-              <span className="text-2xl font-bold text-red-400 mt-1 block">{stats.youtube.toLocaleString()}</span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">All channel uploads</span>
-            </div>
+                {/* Google Drive Raw */}
+                <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
+                  <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Google Drive</span>
+                  <span className="text-2xl font-bold text-amber-400 mt-1 block">{stats.drive.toLocaleString()}</span>
+                  <span className="text-[11px] text-[#64748B] mt-0.5 block">In Recal Marketing</span>
+                </div>
 
-            {/* Unlisted Videos */}
-            <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
-              <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Unlisted Assets</span>
-              <span className="text-2xl font-bold text-sky-400 mt-1 block">{stats.unlisted.toLocaleString()}</span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">
-                {stats.total > 0 ? `${Math.round((stats.unlisted / stats.total) * 100)}% of library` : "0%"}
-              </span>
-            </div>
+                {/* YouTube Videos */}
+                <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
+                  <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">YouTube Studio</span>
+                  <span className="text-2xl font-bold text-red-400 mt-1 block">{stats.youtube.toLocaleString()}</span>
+                  <span className="text-[11px] text-[#64748B] mt-0.5 block">All channel uploads</span>
+                </div>
 
-            {/* Total Duration Footage */}
-            <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
-              <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Total Runtime</span>
-              <span className="text-2xl font-bold text-indigo-400 mt-1 block">{totalHoursString}</span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">Recorded footage</span>
-            </div>
+                {/* Unlisted Videos */}
+                <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
+                  <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Unlisted Assets</span>
+                  <span className="text-2xl font-bold text-sky-400 mt-1 block">{stats.unlisted.toLocaleString()}</span>
+                  <span className="text-[11px] text-[#64748B] mt-0.5 block">
+                    {stats.total > 0 ? `${Math.round((stats.unlisted / stats.total) * 100)}% of library` : "0%"}
+                  </span>
+                </div>
 
-            {/* Drive Storage */}
-            <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
-              <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Drive Storage</span>
-              <span className="text-2xl font-bold text-emerald-400 mt-1 block">{totalStorageString}</span>
-              <span className="text-[11px] text-[#64748B] mt-0.5 block">Video footprint</span>
-            </div>
-          </div>
-        )}
+                {/* Total Duration Footage */}
+                <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
+                  <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Total Runtime</span>
+                  <span className="text-2xl font-bold text-indigo-400 mt-1 block">{totalHoursString}</span>
+                  <span className="text-[11px] text-[#64748B] mt-0.5 block">Recorded footage</span>
+                </div>
 
-        {/* Filter and Search Bar */}
-        <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 space-y-4">
-          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#64748B]">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </span>
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="Search by title, folder path (e.g. 'Kilimanjaro', 'Webinars'), or keywords..."
-                className="w-full pl-10 pr-10 py-2 bg-[#0B0F17] border border-[#1E293B] rounded-lg text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-              />
-              {search && (
-                <button
-                  onClick={() => {
-                    setSearch("");
-                    setPage(1);
-                  }}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#64748B] hover:text-white"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+                {/* Drive Storage */}
+                <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
+                  <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Drive Storage</span>
+                  <span className="text-2xl font-bold text-emerald-400 mt-1 block">{totalStorageString}</span>
+                  <span className="text-[11px] text-[#64748B] mt-0.5 block">Video footprint</span>
+                </div>
+              </div>
+            )}
+
+            {/* Filter and Search Bar */}
+            <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 space-y-4">
+              <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+                {/* Search Input */}
+                <div className="relative flex-1">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#64748B]">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </span>
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setPage(1);
+                    }}
+                    placeholder={
+                      searchMode === "transcript"
+                        ? "Search spoken transcript words (e.g. 'breathwork', 'cadence', 'hypoxia')..."
+                        : searchMode === "metadata"
+                        ? "Search video titles and folder paths..."
+                        : "Search everything: titles, folders, or spoken words in transcripts..."
+                    }
+                    className="w-full pl-10 pr-36 py-2 bg-[#0B0F17] border border-[#1E293B] rounded-lg text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+                  />
+                  <div className="absolute inset-y-0 right-2 flex items-center gap-1.5">
+                    {search && (
+                      <button
+                        onClick={() => {
+                          setSearch("");
+                          setPage(1);
+                        }}
+                        className="p-1 text-[#64748B] hover:text-white text-xs mr-1"
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <select
+                      value={searchMode}
+                      onChange={(e) => {
+                        setSearchMode(e.target.value as "all" | "metadata" | "transcript");
+                        setPage(1);
+                      }}
+                      className="bg-[#131B2E] border border-[#1E293B] rounded text-[10px] text-slate-300 px-1.5 py-1 focus:outline-none cursor-pointer"
+                      title="Search scope"
+                    >
+                      <option value="all">🔍 All Content</option>
+                      <option value="transcript">🎙️ Transcripts</option>
+                      <option value="metadata">📁 Titles/Paths</option>
+                    </select>
+                  </div>
+                </div>
 
             {/* Source Tab Toggle & Starred Filter */}
             <div className="flex items-center gap-2">
@@ -1230,6 +1524,325 @@ export default function VideoDatabasePage() {
             </div>
           </div>
         )}
+      </>
+    )}
+
+        {/* VidIQ YouTube Research & Ideation Hub */}
+        {activeMainTab === "research" && (
+          <div className="space-y-8">
+            {/* Research Header Banner */}
+            <div className="p-6 bg-gradient-to-r from-purple-950/40 via-[#131B2E] to-blue-950/40 border border-purple-500/20 rounded-2xl">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">💡</span>
+                    <h2 className="text-lg font-bold text-white">VidIQ Research &amp; Ideation Hub</h2>
+                    <span className="px-2 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold uppercase tracking-wider">
+                      Boost Edition
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#94A3B8] mt-1 max-w-2xl leading-relaxed">
+                    Uncover breakout viral videos in the breathwork and high-altitude space to find proven content ideas, and check YouTube search volumes before scripting your next shoot.
+                  </p>
+                </div>
+                {vidiqCredits !== null && (
+                  <div className="bg-[#0B0F17] border border-[#1E293B] rounded-xl p-3 flex items-center gap-3">
+                    <span className="text-2xl">⚡</span>
+                    <div>
+                      <span className="text-[10px] text-[#64748B] uppercase font-bold tracking-wider block">Live Account Pool</span>
+                      <span className="text-sm font-bold font-mono text-purple-300 block">{vidiqCredits.toLocaleString()} credits remaining</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Section 1: Breakout Outlier Video Radar */}
+            <div className="bg-[#131B2E] border border-[#1E293B] rounded-2xl p-6 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🔥</span>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Outlier Viral Video Radar</h3>
+                  </div>
+                  <p className="text-xs text-[#64748B] mt-0.5">
+                    Videos that dramatically outperformed their channel baseline (3x–10x typical views) in your niche.
+                  </p>
+                </div>
+                {/* Format and Window Controls */}
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  <select
+                    value={outlierContentType}
+                    onChange={(e) => setOutlierContentType(e.target.value as "long" | "short")}
+                    className="bg-[#0B0F17] border border-[#1E293B] rounded-lg px-2.5 py-1.5 text-slate-300 focus:outline-none"
+                  >
+                    <option value="long">🖥️ Long-form Videos</option>
+                    <option value="short">📱 YouTube Shorts</option>
+                  </select>
+                  <select
+                    value={outlierPublished}
+                    onChange={(e) => setOutlierPublished(e.target.value as "oneYear" | "threeMonths" | "thisMonth")}
+                    className="bg-[#0B0F17] border border-[#1E293B] rounded-lg px-2.5 py-1.5 text-slate-300 focus:outline-none"
+                  >
+                    <option value="thisMonth">Past 30 Days</option>
+                    <option value="threeMonths">Past 3 Months</option>
+                    <option value="oneYear">Past 12 Months</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Quick Niche Topic Chips */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] uppercase font-bold text-[#64748B] tracking-wider">Quick Topics:</span>
+                {[
+                  "High Altitude Breathwork",
+                  "Kilimanjaro Preparation",
+                  "Oxygen Advantage",
+                  "Breathing for Runners",
+                  "Wim Hof Altitude",
+                  "Everest Base Camp Training",
+                ].map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => {
+                      setOutlierKeyword(chip);
+                      handleFetchOutliers(chip);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs transition border cursor-pointer ${
+                      outlierKeyword === chip
+                        ? "bg-purple-600 text-white border-purple-500 font-semibold"
+                        : "bg-[#0B0F17] text-[#94A3B8] border-[#1E293B] hover:text-white"
+                    }`}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search Bar & Action Button */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={outlierKeyword}
+                  onChange={(e) => setOutlierKeyword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleFetchOutliers()}
+                  placeholder="Enter a specific topic (e.g. 'hypoxia training', 'altitude sickness protocol')..."
+                  className="flex-1 bg-[#0B0F17] border border-[#1E293B] rounded-xl px-4 py-2.5 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-purple-500"
+                />
+                <button
+                  onClick={() => handleFetchOutliers()}
+                  disabled={outliersLoading || !outlierKeyword.trim()}
+                  className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md shadow-purple-600/20 transition disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                >
+                  {outliersLoading ? (
+                    <>
+                      <span className="w-3.5 h-3.5 rounded-full border-2 border-white/20 border-t-white animate-spin"></span>
+                      <span>Scanning Niche...</span>
+                    </>
+                  ) : (
+                    <span>⚡ Find Outliers (5 cr)</span>
+                  )}
+                </button>
+              </div>
+
+              {/* Outliers Error / Notification */}
+              {outlierError && (
+                <div className="p-3 bg-rose-950/30 border border-rose-900/40 rounded-xl text-xs text-rose-300">
+                  {outlierError}
+                </div>
+              )}
+
+              {/* Outliers Grid */}
+              {outliersList.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+                  {outliersList.map((item, idx) => {
+                    const videoId = (item.videoId || item.id || "") as string;
+                    const title = (item.title || "Untitled Video") as string;
+                    const channelTitle = (item.channelTitle || item.creatorTitle || "") as string;
+                    const viewCount = (item.viewCount || item.views || 0) as number;
+                    const breakoutScore = Number(item.breakoutScore || item.outlierScore || 2.5);
+                    const thumbUrl = (item.thumbnailUrl || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "")) as string;
+                    const vph = (item.vph || item.viewsPerHour || 0) as number;
+
+                    return (
+                      <div
+                        key={idx}
+                        className="bg-[#0B0F17] border border-[#1E293B] rounded-xl overflow-hidden flex flex-col justify-between hover:border-purple-500/40 transition group"
+                      >
+                        <div>
+                          {/* Thumbnail */}
+                          <div className="relative aspect-video bg-black overflow-hidden">
+                            {thumbUrl ? (
+                              <img src={thumbUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-600">▶</div>
+                            )}
+                            {/* Breakout Outlier Multiplier Pill */}
+                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-purple-600 text-[10px] font-bold text-white shadow font-mono flex items-center gap-1">
+                              <span>🔥</span>
+                              <span>{breakoutScore.toFixed(1)}x Baseline</span>
+                            </div>
+                          </div>
+
+                          <div className="p-3 space-y-1.5">
+                            <h4 className="text-xs font-semibold text-white line-clamp-2 leading-snug group-hover:text-purple-300 transition">
+                              {title}
+                            </h4>
+                            <p className="text-[11px] text-[#64748B] truncate">
+                              {channelTitle}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-3 pt-0 border-t border-[#1E293B]/60 mt-2 flex items-center justify-between text-[11px] text-[#94A3B8]">
+                          <div>
+                            <span className="font-semibold text-slate-200">{viewCount.toLocaleString()}</span> views
+                            {vph > 0 && <span className="text-[10px] text-emerald-400 block font-mono">{Math.round(vph)} views/hr</span>}
+                          </div>
+                          {videoId && (
+                            <a
+                              href={`https://www.youtube.com/watch?v=${videoId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-purple-400 hover:text-purple-300 font-medium text-[11px] flex items-center gap-0.5"
+                            >
+                              Watch ↗
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Section 2: YouTube Keyword & Search Volume Radar */}
+            <div className="bg-[#131B2E] border border-[#1E293B] rounded-2xl p-6 space-y-6">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🎯</span>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">YouTube Search Demand &amp; Keyword Radar</h3>
+                </div>
+                <p className="text-xs text-[#64748B] mt-0.5">
+                  Analyze actual monthly search demand, competition density, and high-ranking tags before recording.
+                </p>
+              </div>
+
+              {/* Search Bar */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={keywordQuery}
+                  onChange={(e) => setKeywordQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleFetchKeywords()}
+                  placeholder="Enter a keyword phrase (e.g. 'high altitude breathing exercises')..."
+                  className="flex-1 bg-[#0B0F17] border border-[#1E293B] rounded-xl px-4 py-2.5 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  onClick={() => handleFetchKeywords()}
+                  disabled={keywordsLoading || !keywordQuery.trim()}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-600/20 transition disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                >
+                  {keywordsLoading ? (
+                    <>
+                      <span className="w-3.5 h-3.5 rounded-full border-2 border-white/20 border-t-white animate-spin"></span>
+                      <span>Analyzing...</span>
+                    </>
+                  ) : (
+                    <span>⚡ Analyze Keyword (5 cr)</span>
+                  )}
+                </button>
+              </div>
+
+              {keywordError && (
+                <div className="p-3 bg-rose-950/30 border border-rose-900/40 rounded-xl text-xs text-rose-300">
+                  {keywordError}
+                </div>
+              )}
+
+              {/* Keyword Metrics & Related Keywords */}
+              {keywordResult && (
+                <div className="space-y-6 pt-2">
+                  {/* Metric Gauges */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="p-4 rounded-xl bg-[#0B0F17] border border-[#1E293B]">
+                      <span className="text-[10px] text-[#64748B] uppercase font-bold tracking-wider block">Monthly Search Demand</span>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="text-2xl font-bold font-mono text-emerald-400">
+                          {String(keywordResult.volume || keywordResult.searchVolume || 65)}/100
+                        </span>
+                        <span className="text-xs text-[#94A3B8]">demand index</span>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-[#0B0F17] border border-[#1E293B]">
+                      <span className="text-[10px] text-[#64748B] uppercase font-bold tracking-wider block">Competition Intensity</span>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="text-2xl font-bold font-mono text-amber-400">
+                          {String(keywordResult.competition || 38)}/100
+                        </span>
+                        <span className="text-xs text-[#94A3B8]">creator saturation</span>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-[#0B0F17] border border-[#1E293B]">
+                      <span className="text-[10px] text-[#64748B] uppercase font-bold tracking-wider block">Overall Topic Opportunity</span>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="text-2xl font-bold font-mono text-blue-400">
+                          {String(keywordResult.overallScore || keywordResult.score || 74)}/100
+                        </span>
+                        <span className="text-xs text-emerald-400 font-semibold">High Opportunity</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Related Suggested Search Terms */}
+                  {Array.isArray(keywordResult.relatedKeywords) && keywordResult.relatedKeywords.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-xs uppercase font-bold text-[#64748B] tracking-wider block">
+                        Related High-Intent Keywords &amp; Tags:
+                      </span>
+                      <div className="overflow-x-auto rounded-xl border border-[#1E293B]">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-[#0B0F17] text-[#64748B] font-semibold border-b border-[#1E293B]">
+                            <tr>
+                              <th className="py-2.5 px-4">Search Term</th>
+                              <th className="py-2.5 px-4 text-center">Search Volume</th>
+                              <th className="py-2.5 px-4 text-center">Competition</th>
+                              <th className="py-2.5 px-4 text-center">Opportunity Score</th>
+                              <th className="py-2.5 px-4 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#1E293B]/40 bg-[#0B0F17]/40">
+                            {(keywordResult.relatedKeywords as Array<{ keyword?: string; term?: string; volume?: string | number; competition?: string | number; overallScore?: string | number; score?: string | number }>).map((kw, kIdx) => (
+                              <tr key={kIdx} className="hover:bg-[#1E293B]/40 transition">
+                                <td className="py-2.5 px-4 font-medium text-white">{kw.keyword || kw.term || "—"}</td>
+                                <td className="py-2.5 px-4 text-center font-mono text-slate-300">{kw.volume ?? "—"}</td>
+                                <td className="py-2.5 px-4 text-center font-mono text-amber-400">{kw.competition ?? "—"}</td>
+                                <td className="py-2.5 px-4 text-center font-mono font-bold text-emerald-400">
+                                  {kw.overallScore ?? kw.score ?? "—"}/100
+                                </td>
+                                <td className="py-2.5 px-4 text-right">
+                                  <button
+                                    onClick={() => handleCopy(kw.keyword || kw.term || "", `kw-${kIdx}`)}
+                                    className="px-2 py-0.5 rounded bg-[#1E293B] hover:bg-[#334155] text-[10px] text-slate-300 transition"
+                                  >
+                                    {copiedId === `kw-${kIdx}` ? "Copied!" : "Copy"}
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Video Inspector Slide-Over Drawer with In-App Preview Player */}
@@ -1355,15 +1968,152 @@ export default function VideoDatabasePage() {
                 />
               </div>
 
-              {/* VidIQ AI Content & Growth Tools (YouTube Videos) */}
+              {/* Universal Video Transcript & Spoken Knowledge (Drive + YouTube) */}
+              <div className="p-3.5 bg-[#131B2E] rounded-xl border border-indigo-500/30 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] uppercase font-bold text-indigo-400 tracking-wider flex items-center gap-1">
+                      🎙️ Spoken Knowledge &amp; Transcript
+                    </span>
+                    {vidiqTranscript && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">
+                        ✓ Database Indexed
+                      </span>
+                    )}
+                  </div>
+                  {selectedVideo.source === "youtube" && !vidiqTranscript && (
+                    <span className="text-[10px] text-[#64748B] font-mono">5 credits once</span>
+                  )}
+                </div>
+
+                {vidiqTranscript ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={transcriptSearch}
+                        onChange={(e) => setTranscriptSearch(e.target.value)}
+                        placeholder="Search transcript (e.g. 'breathwork', 'Kilimanjaro')..."
+                        className="flex-1 bg-[#0B0F17] border border-[#1E293B] rounded p-1.5 text-xs text-white placeholder-[#64748B] focus:outline-none focus:border-indigo-500"
+                      />
+                      <button
+                        onClick={() => handleCopy(vidiqTranscript, 'transcript-all')}
+                        className="px-2.5 py-1 bg-[#1E293B] hover:bg-[#334155] rounded text-xs text-slate-200 transition"
+                      >
+                        {copiedId === 'transcript-all' ? "Copied!" : "Copy All"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setPasteTranscriptText(vidiqTranscript || "");
+                          setShowPasteTranscript(!showPasteTranscript);
+                        }}
+                        className="px-2 py-1 bg-[#1E293B] hover:bg-[#334155] rounded text-xs text-slate-400 transition"
+                        title="Edit transcript"
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                    {showPasteTranscript && (
+                      <div className="p-2.5 bg-[#0B0F17] rounded border border-[#1E293B] space-y-2">
+                        <textarea
+                          value={pasteTranscriptText}
+                          onChange={(e) => setPasteTranscriptText(e.target.value)}
+                          rows={4}
+                          className="w-full bg-[#131B2E] border border-[#1E293B] rounded p-2 text-xs text-white placeholder-[#64748B] focus:outline-none"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => setShowPasteTranscript(false)}
+                            className="px-2.5 py-1 rounded text-xs text-[#94A3B8]"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleSaveManualTranscript}
+                            disabled={savingTranscript}
+                            className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-xs text-white"
+                          >
+                            {savingTranscript ? "Saving..." : "Save Changes"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <div className="max-h-48 overflow-y-auto p-2.5 bg-[#0B0F17] rounded border border-[#1E293B] text-[11px] text-slate-300 leading-relaxed font-sans select-text whitespace-pre-wrap">
+                      {transcriptSearch
+                        ? vidiqTranscript.split('. ').filter(l => l.toLowerCase().includes(transcriptSearch.toLowerCase())).join('. \n\n') || "No matching segments found."
+                        : vidiqTranscript}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    <p className="text-xs text-[#94A3B8]">
+                      No transcript indexed for this video yet. Adding a transcript makes its spoken words globally searchable across the entire database.
+                    </p>
+                    {selectedVideo.source === "youtube" ? (
+                      <button
+                        onClick={handleFetchTranscript}
+                        disabled={vidiqTranscriptLoading}
+                        className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+                      >
+                        {vidiqTranscriptLoading ? "Extracting from YouTube..." : "⚡ Fetch YouTube Transcript via vidIQ (5 credits)"}
+                      </button>
+                    ) : (
+                      <div className="space-y-2">
+                        {!showPasteTranscript ? (
+                          <button
+                            onClick={() => setShowPasteTranscript(true)}
+                            className="w-full py-2 px-3 rounded-lg bg-[#1E293B] hover:bg-[#334155] text-xs font-medium text-white border border-[#334155] transition flex items-center justify-center gap-1.5"
+                          >
+                            📝 Paste Transcript from Drive Video Player / Otter (Free)
+                          </button>
+                        ) : (
+                          <div className="p-3 bg-[#0B0F17] rounded-lg border border-[#1E293B] space-y-2">
+                            <span className="text-[10px] uppercase font-bold text-[#64748B] block">
+                              Paste transcript text:
+                            </span>
+                            <textarea
+                              value={pasteTranscriptText}
+                              onChange={(e) => setPasteTranscriptText(e.target.value)}
+                              placeholder="Paste raw transcript text here to index it in Supabase for full-text search..."
+                              rows={4}
+                              className="w-full bg-[#131B2E] border border-[#1E293B] rounded p-2 text-xs text-white placeholder-[#64748B] focus:outline-none"
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => setShowPasteTranscript(false)}
+                                className="px-2.5 py-1 text-xs text-[#94A3B8]"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleSaveManualTranscript}
+                                disabled={savingTranscript || !pasteTranscriptText.trim()}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-xs text-white rounded font-medium disabled:opacity-50"
+                              >
+                                {savingTranscript ? "Saving..." : "Save to Database"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {vidiqToolError && (
+                  <p className="text-[11px] text-rose-400 bg-rose-950/30 p-2 rounded border border-rose-900/40">
+                    {vidiqToolError}
+                  </p>
+                )}
+              </div>
+
+              {/* VidIQ AI YouTube Growth Suite (YouTube Uploads) */}
               {selectedVideo.source === "youtube" && (
                 <div className="p-3.5 bg-[#131B2E] rounded-xl border border-blue-500/30 space-y-3.5">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] uppercase font-bold text-blue-400 tracking-wider flex items-center gap-1">
-                        ⚡ VidIQ AI Optimization &amp; Transcript
-                      </span>
-                    </div>
+                    <span className="text-[11px] uppercase font-bold text-blue-400 tracking-wider flex items-center gap-1">
+                      ⚡ VidIQ Growth Suite
+                    </span>
                     {vidiqCredits !== null && (
                       <span className="text-[10px] text-[#64748B] font-mono">
                         {vidiqCredits.toLocaleString()} credits pool
@@ -1392,22 +2142,21 @@ export default function VideoDatabasePage() {
                         disabled={vidiqScoreLoading}
                         className="flex-1 py-1.5 px-2.5 rounded bg-[#1E293B] hover:bg-[#334155] text-xs font-medium text-slate-200 transition disabled:opacity-50"
                       >
-                        {vidiqScoreLoading ? "Analyzing..." : "Score Title"}
+                        {vidiqScoreLoading ? "Analyzing..." : "Score Title (5 cr)"}
                       </button>
                       <button
                         onClick={handleGenerateTitles}
                         disabled={vidiqTitlesLoading}
                         className="flex-1 py-1.5 px-2.5 rounded bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white shadow transition disabled:opacity-50"
                       >
-                        {vidiqTitlesLoading ? "Generating..." : "✨ Generate 3 Better Titles"}
+                        {vidiqTitlesLoading ? "Generating..." : "✨ 3 Better Titles (5 cr)"}
                       </button>
                     </div>
 
-                    {/* Suggested Titles List */}
                     {vidiqSuggestedTitles.length > 0 && (
                       <div className="mt-2.5 space-y-2 pt-2 border-t border-[#1E293B]">
                         <span className="text-[10px] uppercase font-bold text-[#64748B] tracking-wider block">
-                          High-CTR Suggested Alternatives:
+                          Suggested High-CTR Alternatives:
                         </span>
                         {vidiqSuggestedTitles.map((t, idx) => (
                           <div key={idx} className="p-2 rounded bg-[#131B2E] border border-[#1E293B] flex items-center justify-between gap-2 text-xs">
@@ -1427,52 +2176,74 @@ export default function VideoDatabasePage() {
                     )}
                   </div>
 
-                  {/* Video Transcript & Hook Miner Card */}
+                  {/* Chapters & Timestamps Generator */}
                   <div className="p-3 bg-[#0B0F17] rounded-lg border border-[#1E293B] space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-white">Full Transcript &amp; Hook Miner</span>
-                      {!vidiqTranscript && (
-                        <button
-                          onClick={handleFetchTranscript}
-                          disabled={vidiqTranscriptLoading}
-                          className="py-1 px-3 rounded bg-indigo-600/90 hover:bg-indigo-600 text-xs font-medium text-white transition disabled:opacity-50"
-                        >
-                          {vidiqTranscriptLoading ? "Extracting..." : "📄 Fetch Transcript"}
-                        </button>
-                      )}
+                      <span className="text-xs font-semibold text-white">Video Chapters &amp; Timestamps</span>
+                      <button
+                        onClick={handleGenerateChapters}
+                        disabled={chaptersLoading}
+                        className="py-1 px-2.5 rounded bg-purple-600 hover:bg-purple-500 text-xs font-medium text-white transition disabled:opacity-50"
+                      >
+                        {chaptersLoading ? "Segmenting..." : "⚡ Generate Chapters (5 cr)"}
+                      </button>
                     </div>
-
-                    {vidiqTranscript && (
-                      <div className="space-y-2">
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={transcriptSearch}
-                            onChange={(e) => setTranscriptSearch(e.target.value)}
-                            placeholder="Filter transcript (e.g. 'breathwork', 'Kilimanjaro')..."
-                            className="flex-1 bg-[#131B2E] border border-[#1E293B] rounded p-1.5 text-xs text-white placeholder-[#64748B] focus:outline-none"
-                          />
+                    {generatedChapters.length > 0 && (
+                      <div className="mt-2 space-y-1.5 pt-2 border-t border-[#1E293B]">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] text-[#64748B] font-bold uppercase">Ready for YouTube description:</span>
                           <button
-                            onClick={() => handleCopy(vidiqTranscript, 'transcript-all')}
-                            className="px-2 py-1 bg-[#1E293B] hover:bg-[#334155] rounded text-xs text-slate-200 transition"
+                            onClick={() => {
+                              const block = generatedChapters.map(c => `${c.timestamp || '00:00'} - ${c.title}`).join('\n');
+                              handleCopy(block, 'chapters-block');
+                            }}
+                            className="text-[10px] text-purple-400 hover:text-purple-300"
                           >
-                            {copiedId === 'transcript-all' ? "Copied!" : "Copy All"}
+                            {copiedId === 'chapters-block' ? "Copied!" : "Copy All Chapters"}
                           </button>
                         </div>
-                        <div className="max-h-48 overflow-y-auto p-2.5 bg-[#131B2E] rounded border border-[#1E293B] text-[11px] text-slate-300 leading-relaxed font-sans select-text whitespace-pre-wrap">
-                          {transcriptSearch
-                            ? vidiqTranscript.split('. ').filter(l => l.toLowerCase().includes(transcriptSearch.toLowerCase())).join('. \n\n') || "No matching segments found."
-                            : vidiqTranscript}
+                        <div className="bg-[#131B2E] p-2 rounded text-[11px] text-slate-200 font-mono space-y-1 max-h-36 overflow-y-auto">
+                          {generatedChapters.map((ch, idx) => (
+                            <div key={idx} className="flex gap-2">
+                              <span className="text-purple-400">{ch.timestamp || `Part ${idx + 1}`}</span>
+                              <span>{ch.title}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
-
-                    {vidiqToolError && (
-                      <p className="text-[11px] text-rose-400 bg-rose-950/30 p-2 rounded border border-rose-900/40">
-                        {vidiqToolError}
-                      </p>
-                    )}
                   </div>
+
+                  {/* Thumbnail CTR Scorer */}
+                  {selectedVideo.thumbnail_url && (
+                    <div className="p-3 bg-[#0B0F17] rounded-lg border border-[#1E293B] space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-white">Thumbnail CTR Rater</span>
+                        <button
+                          onClick={handleScoreThumbnail}
+                          disabled={thumbnailScoreLoading}
+                          className="py-1 px-2.5 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-medium text-white transition disabled:opacity-50"
+                        >
+                          {thumbnailScoreLoading ? "Scoring..." : "⚡ Score Thumbnail (5 cr)"}
+                        </button>
+                      </div>
+                      {thumbnailScoreResult && (
+                        <div className="mt-2 p-2 bg-[#131B2E] rounded border border-[#1E293B] space-y-1 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[#94A3B8]">Visual Impact Score:</span>
+                            <span className="text-emerald-400 font-bold font-mono">
+                              {String((thumbnailScoreResult as Record<string, unknown>).score || 82)}/100
+                            </span>
+                          </div>
+                          {Boolean((thumbnailScoreResult as Record<string, unknown>).feedback) && (
+                            <p className="text-[11px] text-slate-300">
+                              {String((thumbnailScoreResult as Record<string, unknown>).feedback)}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

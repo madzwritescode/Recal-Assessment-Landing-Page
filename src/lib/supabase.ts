@@ -19,6 +19,7 @@ export interface RecalVideoRecord {
   source_id: string;
   title: string;
   description?: string | null;
+  transcript?: string | null;
   privacy_status: 'public' | 'unlisted' | 'private' | 'draft';
   is_live: boolean;
   live_broadcast_content?: string | null;

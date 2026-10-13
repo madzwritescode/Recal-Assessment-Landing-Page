@@ -240,3 +240,43 @@ export async function getVidIQCompetitorChannels(channelId: string) {
   const res = await callVidIQTool('vidiq_similar_channels', { channelId });
   return extractStructured(res);
 }
+
+/**
+ * Discover outlier viral videos in a niche
+ */
+export async function getVidIQOutliers(
+  keyword?: string,
+  options: {
+    limit?: number;
+    contentType?: 'long' | 'short';
+    language?: string;
+    publishedWithin?: 'thisWeek' | 'thisMonth' | 'threeMonths' | 'sixMonths' | 'oneYear' | 'allTime';
+  } = {}
+) {
+  const args: Record<string, unknown> = {
+    limit: options.limit || 20,
+    contentType: options.contentType || 'long',
+    language: options.language || 'en',
+  };
+  if (keyword) args.keyword = keyword;
+  if (options.publishedWithin) args.publishedWithin = options.publishedWithin;
+  const res = await callVidIQTool('vidiq_outliers', args);
+  return extractStructured(res);
+}
+
+/**
+ * Generate video chapters and timestamps from video captions
+ */
+export async function generateVidIQChapters(videoId: string, chapterCount = 6) {
+  const res = await callVidIQTool('vidiq_generate_video_chapters', { videoId, chapterCount });
+  return extractStructured(res);
+}
+
+/**
+ * Poll status of an asynchronous vidIQ job
+ */
+export async function pollVidIQJob(mcpJobId: string) {
+  const res = await callVidIQTool('vidiq_job_poll', { mcpJobId });
+  return extractStructured(res);
+}
+

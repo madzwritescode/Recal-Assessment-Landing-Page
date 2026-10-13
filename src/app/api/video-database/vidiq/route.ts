@@ -8,6 +8,9 @@ import {
   researchVidIQKeywords,
   getVidIQTranscript,
   getVidIQVideoStats,
+  getVidIQOutliers,
+  generateVidIQChapters,
+  pollVidIQJob,
   callVidIQTool,
 } from '@/lib/vidiq/client';
 
@@ -120,7 +123,85 @@ export async function POST(req: NextRequest) {
         if (!videoId) {
           return NextResponse.json({ error: 'videoId is required' }, { status: 400 });
         }
-        const result = await getVidIQTranscript(videoId);
+        const result = (await getVidIQTranscript(videoId)) as Record<string, unknown>;
+
+        // Extract transcription string if present
+        let transcriptionText: string | null = null;
+        const resObj = result as {
+          structuredContent?: { transcription?: string };
+          transcription?: string;
+          content?: Array<{ text?: string }>;
+        };
+
+        if (resObj?.structuredContent?.transcription) {
+          transcriptionText = resObj.structuredContent.transcription;
+        } else if (resObj?.transcription) {
+          transcriptionText = resObj.transcription;
+        } else if (resObj?.content?.[0]?.text) {
+          try {
+            const parsed = JSON.parse(resObj.content[0].text);
+            transcriptionText = parsed.transcription || resObj.content[0].text;
+          } catch {
+            transcriptionText = resObj.content[0].text;
+          }
+        }
+
+        // Auto-persist to Supabase so it becomes globally searchable for 0 future credits!
+        if (transcriptionText) {
+          try {
+            await supabase
+              .from('recal_videos')
+              .update({ transcript: transcriptionText, updated_at: new Date().toISOString() })
+              .eq('source_id', videoId);
+          } catch (dbErr) {
+            console.warn('Could not auto-save transcript to Supabase:', dbErr);
+          }
+        }
+
+        return NextResponse.json({ result, savedToDb: Boolean(transcriptionText) });
+      }
+
+      case 'save_transcript': {
+        const { videoId, transcript } = payload || {};
+        if (!videoId || !transcript) {
+          return NextResponse.json({ error: 'videoId and transcript are required' }, { status: 400 });
+        }
+        const { error } = await supabase
+          .from('recal_videos')
+          .update({ transcript, updated_at: new Date().toISOString() })
+          .eq('source_id', videoId);
+
+        if (error) {
+          return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+        return NextResponse.json({ success: true });
+      }
+
+      case 'outliers': {
+        const { keyword, limit, contentType, publishedWithin } = payload || {};
+        const result = await getVidIQOutliers(keyword, {
+          limit: limit ? parseInt(limit, 10) : 20,
+          contentType: contentType || 'long',
+          publishedWithin: publishedWithin || 'oneYear',
+        });
+        return NextResponse.json({ result });
+      }
+
+      case 'generate_chapters': {
+        const { videoId, chapterCount } = payload || {};
+        if (!videoId) {
+          return NextResponse.json({ error: 'videoId is required' }, { status: 400 });
+        }
+        const result = await generateVidIQChapters(videoId, chapterCount || 6);
+        return NextResponse.json({ result });
+      }
+
+      case 'poll_job': {
+        const { mcpJobId } = payload || {};
+        if (!mcpJobId) {
+          return NextResponse.json({ error: 'mcpJobId is required' }, { status: 400 });
+        }
+        const result = await pollVidIQJob(mcpJobId);
         return NextResponse.json({ result });
       }
 
