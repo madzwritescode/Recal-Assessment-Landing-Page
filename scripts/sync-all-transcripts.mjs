@@ -224,114 +224,6 @@ async function syncDriveTranscripts(tokenManager) {
   log(`Errors:                   ${errorCount}`);
 }
 
-async function syncYouTubeTranscripts() {
-  log('\n========================================');
-  log('--- STEP 2: Processing YouTube Videos ---');
-  log('========================================');
-
-  const apiKey = process.env.VIDIQ_API_KEY || 'vidiq_ii7QOdnF6Pps_JJtPDwAbXYHPq5yNcG9AzQ3aVdT';
-
-  const videos = await fetchAllPendingVideos('youtube');
-  const total = videos.length;
-  log(`Found ${total} YouTube videos awaiting transcript processing.`);
-
-  let transcribedCount = 0;
-  let emptyCount = 0;
-  let errorCount = 0;
-
-  for (let i = 0; i < total; i++) {
-    const v = videos[i];
-    const prefix = `[YouTube ${i + 1}/${total}]`;
-
-    try {
-      const res = await fetch('https://mcp.vidiq.com/mcp', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: Date.now(),
-          method: 'tools/call',
-          params: {
-            name: 'vidiq_video_transcript',
-            arguments: { videoId: v.source_id },
-          },
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`vidIQ API responded with status ${res.status}`);
-      }
-
-      const text = await res.text();
-      let resObj = null;
-
-      for (const line of text.split('\n')) {
-        if (line.startsWith('data: ')) {
-          try {
-            resObj = JSON.parse(line.slice(6));
-            break;
-          } catch {
-            // continue
-          }
-        }
-      }
-
-      if (!resObj) {
-        try {
-          resObj = JSON.parse(text);
-        } catch {
-          // continue
-        }
-      }
-
-      let transcript = null;
-      if (resObj?.result?.structuredContent?.transcription) {
-        transcript = resObj.result.structuredContent.transcription;
-      } else if (resObj?.result?.content?.[0]?.text) {
-        try {
-          const parsed = JSON.parse(resObj.result.content[0].text);
-          transcript = parsed.transcription || resObj.result.content[0].text;
-        } catch {
-          transcript = resObj.result.content[0].text;
-        }
-      }
-
-      if (transcript && transcript.trim()) {
-        await supabase
-          .from('recal_videos')
-          .update({ transcript: transcript.trim(), updated_at: new Date().toISOString() })
-          .eq('id', v.id);
-
-        transcribedCount++;
-        log(`${prefix} ✓ TRANSCRIBED (${transcript.length} chars): "${v.title}"`);
-      } else {
-        await supabase
-          .from('recal_videos')
-          .update({ transcript: '', updated_at: new Date().toISOString() })
-          .eq('id', v.id);
-
-        emptyCount++;
-        log(`${prefix} - No spoken speech / music: "${v.title}"`);
-      }
-    } catch (err) {
-      errorCount++;
-      log(`${prefix} ✗ ERROR for "${v.title}": ${err.message}`);
-    }
-
-    // Delay between vidIQ requests
-    await sleep(200);
-  }
-
-  log('\n--- YouTube Sync Complete ---');
-  log(`Transcribed with speech: ${transcribedCount}`);
-  log(`Empty / Music clips:      ${emptyCount}`);
-  log(`Errors:                   ${errorCount}`);
-}
-
 async function main() {
   log('=====================================================');
   log('Starting Recal Video Database Full Transcription Sync');
@@ -344,15 +236,12 @@ async function main() {
     const auth = await getGoogleDriveAuth();
     const tokenManager = new DriveTokenManager(auth);
 
-    // 1. Process Google Drive Videos
+    // 1. Process Google Drive Videos (100% Free Google Drive TimedText - 0 vidIQ credits)
     await syncDriveTranscripts(tokenManager);
-
-    // 2. Process YouTube Videos
-    await syncYouTubeTranscripts();
 
     const elapsedMinutes = ((Date.now() - startTime) / 60000).toFixed(1);
     log('\n=====================================================');
-    log(`ALL TRANSCRIPTION SYNC FINISHED IN ${elapsedMinutes} MINUTES!`);
+    log(`GOOGLE DRIVE TRANSCRIPTION SYNC FINISHED IN ${elapsedMinutes} MINUTES!`);
     log('=====================================================');
   } catch (err) {
     log('Fatal error during sync: ' + err.message);
