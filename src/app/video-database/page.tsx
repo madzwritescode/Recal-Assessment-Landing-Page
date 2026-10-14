@@ -415,48 +415,70 @@ export default function VideoDatabasePage() {
     setVidiqTranscriptLoading(true);
     setVidiqToolError(null);
     try {
-      const res = await fetch("/api/video-database/vidiq", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "transcript",
-          payload: {
+      if (selectedVideo.source === "gdrive") {
+        const res = await fetch("/api/video-database/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             videoId: selectedVideo.source_id,
-          },
-        }),
-      });
-      const data = await res.json();
-      let transcription = data.result?.structuredContent?.transcription || data.result?.transcription;
-      if (!transcription && data.result?.content?.[0]?.text) {
-        try {
-          const parsed = JSON.parse(data.result.content[0].text);
-          transcription = parsed.transcription;
-        } catch {
-          transcription = data.result.content[0].text;
+          }),
+        });
+        const data = await res.json();
+        if (data.success && data.transcript) {
+          setVidiqTranscript(data.transcript);
+          setSelectedVideo((prev) => prev ? { ...prev, transcript: data.transcript } : null);
+          setVideos((prev) =>
+            prev.map((v) =>
+              v.source_id === selectedVideo.source_id ? { ...v, transcript: data.transcript } : v
+            )
+          );
+        } else {
+          setVidiqToolError(data.message || data.error || "No spoken transcript found in Google Drive for this video.");
         }
-      }
-      if (!transcription && data.result?.result?.content?.[0]?.text) {
-        try {
-          const parsed = JSON.parse(data.result.result.content[0].text);
-          transcription = parsed.transcription;
-        } catch {
-          transcription = data.result.result.content[0].text;
-        }
-      }
-
-      if (transcription) {
-        setVidiqTranscript(transcription);
-        setSelectedVideo((prev) => prev ? { ...prev, transcript: transcription } : null);
-        setVideos((prev) =>
-          prev.map((v) =>
-            v.source_id === selectedVideo.source_id ? { ...v, transcript: transcription } : v
-          )
-        );
-        fetchStatus();
-      } else if (data.error) {
-        setVidiqToolError(data.error);
       } else {
-        setVidiqToolError("No transcript found for this video.");
+        const res = await fetch("/api/video-database/vidiq", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "transcript",
+            payload: {
+              videoId: selectedVideo.source_id,
+            },
+          }),
+        });
+        const data = await res.json();
+        let transcription = data.result?.structuredContent?.transcription || data.result?.transcription;
+        if (!transcription && data.result?.content?.[0]?.text) {
+          try {
+            const parsed = JSON.parse(data.result.content[0].text);
+            transcription = parsed.transcription;
+          } catch {
+            transcription = data.result.content[0].text;
+          }
+        }
+        if (!transcription && data.result?.result?.content?.[0]?.text) {
+          try {
+            const parsed = JSON.parse(data.result.result.content[0].text);
+            transcription = parsed.transcription;
+          } catch {
+            transcription = data.result.result.content[0].text;
+          }
+        }
+
+        if (transcription) {
+          setVidiqTranscript(transcription);
+          setSelectedVideo((prev) => prev ? { ...prev, transcript: transcription } : null);
+          setVideos((prev) =>
+            prev.map((v) =>
+              v.source_id === selectedVideo.source_id ? { ...v, transcript: transcription } : v
+            )
+          );
+          fetchStatus();
+        } else if (data.error) {
+          setVidiqToolError(data.error);
+        } else {
+          setVidiqToolError("No transcript found for this video.");
+        }
       }
     } catch (err: unknown) {
       setVidiqToolError(err instanceof Error ? err.message : "Failed to fetch transcript");
@@ -2079,12 +2101,19 @@ export default function VideoDatabasePage() {
                       </button>
                     ) : (
                       <div className="space-y-2">
+                        <button
+                          onClick={handleFetchTranscript}
+                          disabled={vidiqTranscriptLoading}
+                          className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >
+                          {vidiqTranscriptLoading ? "Extracting from Google Drive..." : "⚡ Auto-Extract Drive Transcript (Free)"}
+                        </button>
                         {!showPasteTranscript ? (
                           <button
                             onClick={() => setShowPasteTranscript(true)}
-                            className="w-full py-2 px-3 rounded-lg bg-[#1E293B] hover:bg-[#334155] text-xs font-medium text-white border border-[#334155] transition flex items-center justify-center gap-1.5"
+                            className="w-full py-1.5 px-3 rounded-lg bg-[#1E293B] hover:bg-[#334155] text-[11px] font-medium text-[#94A3B8] hover:text-white border border-[#334155] transition flex items-center justify-center gap-1.5"
                           >
-                            📝 Paste Transcript from Drive Video Player / Otter (Free)
+                            📝 Or Paste / Edit Manually (Free)
                           </button>
                         ) : (
                           <div className="p-3 bg-[#0B0F17] rounded-lg border border-[#1E293B] space-y-2">

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getDriveClient } from '@/lib/video-sync/drive-credentials';
+import { getDriveClient, getGoogleDriveCredentials } from '@/lib/video-sync/drive-credentials';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,32 +38,90 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Action 2: Gemini AI automated transcription
-    const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY;
-
-    if (!geminiApiKey) {
-      return NextResponse.json({
-        error: 'GEMINI_API_KEY is not configured in .env.local. You can get a free key (1,500 free requests/day) at aistudio.google.com, or paste the transcript text directly.',
-        requiresKey: true,
-      }, { status: 400 });
+    // Action 2: Google Drive native timedtext caption extraction (0 credits, fast & free)
+    const creds = await getGoogleDriveCredentials();
+    if (!creds) {
+      return NextResponse.json(
+        { error: 'Google Drive credentials not configured in environment or database' },
+        { status: 400 }
+      );
     }
 
-    // Check if video exists in Drive
-    const drive = await getDriveClient();
-    const fileMeta = await drive.files.get({
-      fileId: videoId,
-      supportsAllDrives: true,
-      fields: 'id, name, mimeType, size',
+    const { google } = await import('googleapis');
+    const auth = new google.auth.JWT({
+      email: creds.clientEmail,
+      key: creds.privateKey,
+      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
     });
+    const tokenRes = await auth.getAccessToken();
+    const token = tokenRes.token;
 
-    if (!fileMeta.data) {
-      return NextResponse.json({ error: 'File not found in Google Drive' }, { status: 404 });
+    function parseTimedTextXml(xml: string): string | null {
+      if (!xml || typeof xml !== 'string') return null;
+      const regex = /<text\s+start="([\d.]+)"\s+dur="([\d.]+)"[^>]*>([\s\S]*?)<\/text>/gi;
+      const parts: string[] = [];
+      let match;
+      while ((match = regex.exec(xml)) !== null) {
+        const text = match[3]
+          .replace(/&amp;/g, '&')
+          .replace(/&#39;/g, "'")
+          .replace(/&quot;/g, '"')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/\n/g, ' ')
+          .trim();
+        if (text) parts.push(text);
+      }
+      if (!parts.length) return null;
+      return parts.join(' ');
+    }
+
+    let parsedTranscript: string | null = null;
+    const trackUrls = [
+      `https://drive.google.com/timedtext?v=${videoId}&type=track&lang=en&name=&kind=asr`,
+      `https://drive.google.com/timedtext?v=${videoId}&type=track&lang=en`,
+    ];
+
+    for (const url of trackUrls) {
+      try {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.status === 200) {
+          const xml = await res.text();
+          const parsed = parseTimedTextXml(xml);
+          if (parsed) {
+            parsedTranscript = parsed;
+            break;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn('Timedtext fetch warning:', fetchErr);
+      }
+    }
+
+    if (parsedTranscript) {
+      const { error: dbErr } = await supabase
+        .from('recal_videos')
+        .update({
+          transcript: parsedTranscript,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('source_id', videoId);
+
+      if (dbErr) {
+        return NextResponse.json({ error: dbErr.message }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        transcript: parsedTranscript,
+        savedToDb: true,
+        message: 'Transcript extracted and saved to database successfully.',
+      });
     }
 
     return NextResponse.json({
-      success: true,
-      message: 'Drive file verified. Ready for audio transcription.',
-      fileName: fileMeta.data.name,
+      success: false,
+      message: 'No spoken transcript found in Google Drive for this video (likely silent footage, B-roll, or background music).',
     });
   } catch (err) {
     console.error('Error in transcribe route:', err);

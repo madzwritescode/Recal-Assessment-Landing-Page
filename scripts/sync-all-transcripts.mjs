@@ -1,0 +1,363 @@
+/**
+ * Automated Batch Transcription Pipeline
+ * 
+ * Fetches auto-generated captions for Google Drive videos (via Drive TimedText API)
+ * and YouTube videos (via vidIQ / YouTube caption bridge), formats spoken text,
+ * and saves verbatim transcripts to Supabase (recal_videos.transcript).
+ */
+
+import fs from 'fs';
+import path from 'path';
+import { google } from 'googleapis';
+import { createClient } from '@supabase/supabase-js';
+
+// Setup log file
+const logDir = path.resolve(process.cwd(), 'logs');
+if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+const logFile = path.resolve(logDir, 'transcript-sync.log');
+const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+
+function log(msg) {
+  const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  console.log(line);
+  logStream.write(line + '\n');
+}
+
+// 1. Load environment variables from .env.local if present
+const envPath = path.resolve(process.cwd(), '.env.local');
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  envContent.split('\n').forEach((line) => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const idx = trimmed.indexOf('=');
+      if (idx !== -1) {
+        const key = trimmed.slice(0, idx).trim();
+        const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  });
+}
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  log('Error: Supabase credentials not found in environment.');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// XML Parser for Google Drive TimedText
+function parseTimedTextXml(xml) {
+  if (!xml || typeof xml !== 'string') return null;
+  const regex = /<text\s+start="([\d.]+)"\s+dur="([\d.]+)"[^>]*>([\s\S]*?)<\/text>/gi;
+  const parts = [];
+  let match;
+  while ((match = regex.exec(xml)) !== null) {
+    const text = match[3]
+      .replace(/&amp;/g, '&')
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\n/g, ' ')
+      .trim();
+    if (text) {
+      parts.push(text);
+    }
+  }
+  if (!parts.length) return null;
+  return parts.join(' ');
+}
+
+// Sleep helper
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function getGoogleDriveAuth() {
+  let clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+  if (!clientEmail || !privateKey) {
+    const { data } = await supabase
+      .from('recal_settings')
+      .select('value')
+      .eq('key', 'google_drive_credentials')
+      .maybeSingle();
+
+    if (data?.value) {
+      const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+      clientEmail = parsed.client_email;
+      privateKey = parsed.private_key;
+    }
+  }
+
+  if (!clientEmail || !privateKey) {
+    throw new Error('Google Drive credentials not available.');
+  }
+
+  const auth = new google.auth.JWT({
+    email: clientEmail,
+    key: privateKey.replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  });
+
+  return auth;
+}
+
+// Token manager for Drive
+class DriveTokenManager {
+  constructor(auth) {
+    this.auth = auth;
+    this.token = null;
+    this.expiresAt = 0;
+  }
+
+  async getToken() {
+    const now = Date.now();
+    if (!this.token || now > this.expiresAt - 60000) {
+      const res = await this.auth.getAccessToken();
+      this.token = res.token;
+      this.expiresAt = now + 50 * 60 * 1000; // 50 mins
+    }
+    return this.token;
+  }
+}
+
+// Paginated fetcher for Supabase
+async function fetchAllPendingVideos(source) {
+  let all = [];
+  let page = 0;
+  const pageSize = 500;
+  while (true) {
+    const { data, error } = await supabase
+      .from('recal_videos')
+      .select('id, source_id, title')
+      .eq('source', source)
+      .is('transcript', null)
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (error || !data || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < pageSize) break;
+    page++;
+  }
+  return all;
+}
+
+async function syncDriveTranscripts(tokenManager) {
+  log('\n========================================');
+  log('--- STEP 1: Processing Google Drive Videos ---');
+  log('========================================');
+
+  const videos = await fetchAllPendingVideos('gdrive');
+  const total = videos.length;
+  log(`Found ${total} Google Drive videos awaiting transcript processing.`);
+
+  let transcribedCount = 0;
+  let silentCount = 0;
+  let errorCount = 0;
+
+  for (let i = 0; i < total; i++) {
+    const v = videos[i];
+    const prefix = `[GDrive ${i + 1}/${total}]`;
+
+    try {
+      const token = await tokenManager.getToken();
+      let transcriptText = null;
+
+      const trackUrls = [
+        `https://drive.google.com/timedtext?v=${v.source_id}&type=track&lang=en&name=&kind=asr`,
+        `https://drive.google.com/timedtext?v=${v.source_id}&type=track&lang=en`,
+      ];
+
+      for (const url of trackUrls) {
+        try {
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+          if (res.status === 200) {
+            const xml = await res.text();
+            const parsed = parseTimedTextXml(xml);
+            if (parsed) {
+              transcriptText = parsed;
+              break;
+            }
+          }
+        } catch {
+          // ignore sub-track error and try next
+        }
+      }
+
+      if (transcriptText) {
+        await supabase
+          .from('recal_videos')
+          .update({ transcript: transcriptText, updated_at: new Date().toISOString() })
+          .eq('id', v.id);
+
+        transcribedCount++;
+        log(`${prefix} ✓ TRANSCRIBED (${transcriptText.length} chars): "${v.title}"`);
+      } else {
+        // Mark as empty string so it indicates checked with no speech
+        await supabase
+          .from('recal_videos')
+          .update({ transcript: '', updated_at: new Date().toISOString() })
+          .eq('id', v.id);
+
+        silentCount++;
+        log(`${prefix} - No spoken speech / B-roll: "${v.title}"`);
+      }
+    } catch (err) {
+      errorCount++;
+      log(`${prefix} ✗ ERROR for "${v.title}": ${err.message}`);
+    }
+
+    // Small delay between requests to avoid rate issues
+    await sleep(60);
+  }
+
+  log('\n--- Google Drive Sync Complete ---');
+  log(`Transcribed with speech: ${transcribedCount}`);
+  log(`Silent / B-roll clips:    ${silentCount}`);
+  log(`Errors:                   ${errorCount}`);
+}
+
+async function syncYouTubeTranscripts() {
+  log('\n========================================');
+  log('--- STEP 2: Processing YouTube Videos ---');
+  log('========================================');
+
+  const apiKey = process.env.VIDIQ_API_KEY || 'vidiq_ii7QOdnF6Pps_JJtPDwAbXYHPq5yNcG9AzQ3aVdT';
+
+  const videos = await fetchAllPendingVideos('youtube');
+  const total = videos.length;
+  log(`Found ${total} YouTube videos awaiting transcript processing.`);
+
+  let transcribedCount = 0;
+  let emptyCount = 0;
+  let errorCount = 0;
+
+  for (let i = 0; i < total; i++) {
+    const v = videos[i];
+    const prefix = `[YouTube ${i + 1}/${total}]`;
+
+    try {
+      const res = await fetch('https://mcp.vidiq.com/mcp', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'tools/call',
+          params: {
+            name: 'vidiq_video_transcript',
+            arguments: { videoId: v.source_id },
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`vidIQ API responded with status ${res.status}`);
+      }
+
+      const text = await res.text();
+      let resObj = null;
+
+      for (const line of text.split('\n')) {
+        if (line.startsWith('data: ')) {
+          try {
+            resObj = JSON.parse(line.slice(6));
+            break;
+          } catch {
+            // continue
+          }
+        }
+      }
+
+      if (!resObj) {
+        try {
+          resObj = JSON.parse(text);
+        } catch {
+          // continue
+        }
+      }
+
+      let transcript = null;
+      if (resObj?.result?.structuredContent?.transcription) {
+        transcript = resObj.result.structuredContent.transcription;
+      } else if (resObj?.result?.content?.[0]?.text) {
+        try {
+          const parsed = JSON.parse(resObj.result.content[0].text);
+          transcript = parsed.transcription || resObj.result.content[0].text;
+        } catch {
+          transcript = resObj.result.content[0].text;
+        }
+      }
+
+      if (transcript && transcript.trim()) {
+        await supabase
+          .from('recal_videos')
+          .update({ transcript: transcript.trim(), updated_at: new Date().toISOString() })
+          .eq('id', v.id);
+
+        transcribedCount++;
+        log(`${prefix} ✓ TRANSCRIBED (${transcript.length} chars): "${v.title}"`);
+      } else {
+        await supabase
+          .from('recal_videos')
+          .update({ transcript: '', updated_at: new Date().toISOString() })
+          .eq('id', v.id);
+
+        emptyCount++;
+        log(`${prefix} - No spoken speech / music: "${v.title}"`);
+      }
+    } catch (err) {
+      errorCount++;
+      log(`${prefix} ✗ ERROR for "${v.title}": ${err.message}`);
+    }
+
+    // Delay between vidIQ requests
+    await sleep(200);
+  }
+
+  log('\n--- YouTube Sync Complete ---');
+  log(`Transcribed with speech: ${transcribedCount}`);
+  log(`Empty / Music clips:      ${emptyCount}`);
+  log(`Errors:                   ${errorCount}`);
+}
+
+async function main() {
+  log('=====================================================');
+  log('Starting Recal Video Database Full Transcription Sync');
+  log('Timestamp: ' + new Date().toISOString());
+  log('=====================================================');
+
+  const startTime = Date.now();
+
+  try {
+    const auth = await getGoogleDriveAuth();
+    const tokenManager = new DriveTokenManager(auth);
+
+    // 1. Process Google Drive Videos
+    await syncDriveTranscripts(tokenManager);
+
+    // 2. Process YouTube Videos
+    await syncYouTubeTranscripts();
+
+    const elapsedMinutes = ((Date.now() - startTime) / 60000).toFixed(1);
+    log('\n=====================================================');
+    log(`ALL TRANSCRIPTION SYNC FINISHED IN ${elapsedMinutes} MINUTES!`);
+    log('=====================================================');
+  } catch (err) {
+    log('Fatal error during sync: ' + err.message);
+    process.exit(1);
+  }
+}
+
+main();
