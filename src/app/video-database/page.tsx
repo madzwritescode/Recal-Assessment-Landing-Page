@@ -14,6 +14,8 @@ interface VideoStats {
   public: number;
   private: number;
   live: number;
+  transcripts?: number;
+  silent?: number;
   totalDurationSeconds: number;
   totalFileSizeBytes: number;
   totalViews: number;
@@ -94,6 +96,7 @@ export default function VideoDatabasePage() {
   const [orientationFilter, setOrientationFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [starredOnly, setStarredOnly] = useState<boolean>(false);
+  const [transcriptFilter, setTranscriptFilter] = useState<"all" | "has_transcript" | "silent">("all");
   const [sortBy, setSortBy] = useState<string>("newest");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [page, setPage] = useState<number>(1);
@@ -165,6 +168,12 @@ export default function VideoDatabasePage() {
         limit: limit.toString(),
       });
 
+      if (transcriptFilter === "has_transcript") {
+        params.set("has_transcript", "true");
+      } else if (transcriptFilter === "silent") {
+        params.set("has_transcript", "false");
+      }
+
       const res = await fetch(`/api/video-database?${params.toString()}`);
       if (res.ok) {
         const data: ApiResponse = await res.json();
@@ -178,7 +187,7 @@ export default function VideoDatabasePage() {
     } finally {
       setLoading(false);
     }
-  }, [search, searchMode, sourceFilter, privacyFilter, durationFilter, liveFilter, sortBy, page, limit]);
+  }, [search, searchMode, sourceFilter, privacyFilter, durationFilter, liveFilter, transcriptFilter, sortBy, page, limit]);
 
   useEffect(() => {
     fetchStatus();
@@ -189,6 +198,14 @@ export default function VideoDatabasePage() {
       fetchVideos();
     }, 250);
     return () => clearTimeout(timer);
+  }, [fetchVideos]);
+
+  // Live auto-refresh stats every 12 seconds so counters tick up in real time
+  useEffect(() => {
+    const pollTimer = setInterval(() => {
+      fetchVideos();
+    }, 12000);
+    return () => clearInterval(pollTimer);
   }, [fetchVideos]);
 
   // Handle URL auth params
@@ -920,7 +937,7 @@ export default function VideoDatabasePage() {
           <>
             {/* KPI Summary Cards */}
             {stats && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
                 {/* Total Videos */}
                 <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 shadow-sm">
                   <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Total Videos</span>
@@ -940,6 +957,53 @@ export default function VideoDatabasePage() {
                   <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">YouTube Studio</span>
                   <span className="text-2xl font-bold text-red-400 mt-1 block">{stats.youtube.toLocaleString()}</span>
                   <span className="text-[11px] text-[#64748B] mt-0.5 block">All channel uploads</span>
+                </div>
+
+                {/* Searchable Transcripts (Live Active Counter) */}
+                <div
+                  onClick={() => {
+                    setTranscriptFilter(transcriptFilter === "has_transcript" ? "all" : "has_transcript");
+                    setPage(1);
+                  }}
+                  className={`border rounded-xl p-4 shadow-sm cursor-pointer transition select-none ${
+                    transcriptFilter === "has_transcript"
+                      ? "bg-indigo-950/60 border-indigo-500 ring-2 ring-indigo-500"
+                      : "bg-[#131B2E] border-[#1E293B] hover:border-indigo-500/50"
+                  }`}
+                  title="Click to view all videos with live searchable transcripts"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-indigo-300 uppercase tracking-wider block">Transcripts Live</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Live in Supabase"></span>
+                  </div>
+                  <span className="text-2xl font-bold text-indigo-400 mt-1 block">
+                    {stats.transcripts !== undefined ? stats.transcripts.toLocaleString() : "..."}
+                  </span>
+                  <span className="text-[11px] text-indigo-300/70 mt-0.5 block">
+                    {transcriptFilter === "has_transcript" ? "✓ Filter Active" : "Click to filter"}
+                  </span>
+                </div>
+
+                {/* Silent / B-Roll (Live Filter Counter) */}
+                <div
+                  onClick={() => {
+                    setTranscriptFilter(transcriptFilter === "silent" ? "all" : "silent");
+                    setPage(1);
+                  }}
+                  className={`border rounded-xl p-4 shadow-sm cursor-pointer transition select-none ${
+                    transcriptFilter === "silent"
+                      ? "bg-slate-800/80 border-slate-400 ring-2 ring-slate-400"
+                      : "bg-[#131B2E] border-[#1E293B] hover:border-slate-500/50"
+                  }`}
+                  title="Click to view silent clips or ambient B-roll footage"
+                >
+                  <span className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider block">Silent / B-Roll</span>
+                  <span className="text-2xl font-bold text-slate-300 mt-1 block">
+                    {stats.silent !== undefined ? stats.silent.toLocaleString() : "..."}
+                  </span>
+                  <span className="text-[11px] text-[#64748B] mt-0.5 block">
+                    {transcriptFilter === "silent" ? "✓ Filter Active" : "No speech detected"}
+                  </span>
                 </div>
 
                 {/* Unlisted Videos */}
@@ -1071,6 +1135,46 @@ export default function VideoDatabasePage() {
                 >
                   <span className="w-2 h-2 rounded-full bg-red-400"></span>
                   YouTube
+                </button>
+              </div>
+
+              {/* Transcript Quick Filter */}
+              <div className="flex items-center bg-[#0B0F17] border border-[#1E293B] rounded-lg p-1 text-xs font-medium">
+                <button
+                  onClick={() => {
+                    setTranscriptFilter("all");
+                    setPage(1);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-md transition ${
+                    transcriptFilter === "all" ? "bg-slate-700 text-white font-semibold" : "text-[#94A3B8] hover:text-white"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => {
+                    setTranscriptFilter("has_transcript");
+                    setPage(1);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-md transition flex items-center gap-1.5 ${
+                    transcriptFilter === "has_transcript" ? "bg-indigo-600 text-white font-semibold" : "text-[#94A3B8] hover:text-white"
+                  }`}
+                  title="Filter to only videos with searchable transcripts"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>🎙️ Transcripts ({stats?.transcripts !== undefined ? stats.transcripts.toLocaleString() : "0"})</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setTranscriptFilter("silent");
+                    setPage(1);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-md transition flex items-center gap-1.5 ${
+                    transcriptFilter === "silent" ? "bg-slate-800 text-white font-semibold" : "text-[#94A3B8] hover:text-white"
+                  }`}
+                  title="Filter to silent clips, B-roll, or background music"
+                >
+                  <span>🎬 Silent ({stats?.silent !== undefined ? stats.silent.toLocaleString() : "0"})</span>
                 </button>
               </div>
 

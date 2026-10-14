@@ -57,6 +57,14 @@ export async function GET(request: Request) {
       query = query.gt('duration_seconds', 3600);
     }
 
+    // Has Transcript filter ('true', 'false', 'all')
+    const hasTranscript = searchParams.get('has_transcript');
+    if (hasTranscript === 'true') {
+      query = query.neq('transcript', '').not('transcript', 'is', null);
+    } else if (hasTranscript === 'false') {
+      query = query.eq('transcript', '');
+    }
+
     // Search query across title, description, folder_path, and spoken transcript
     if (search.trim()) {
       const term = `%${search.trim()}%`;
@@ -157,6 +165,8 @@ export async function GET(request: Request) {
       publicCountRes,
       privateCountRes,
       liveCountRes,
+      transcriptsCountRes,
+      silentCountRes,
     ] = await Promise.all([
       supabase.from('recal_videos').select('*', { count: 'exact', head: true }).eq('status', 'active'),
       supabase.from('recal_videos').select('*', { count: 'exact', head: true }).eq('status', 'active').eq('source', 'gdrive'),
@@ -165,6 +175,8 @@ export async function GET(request: Request) {
       supabase.from('recal_videos').select('*', { count: 'exact', head: true }).eq('status', 'active').eq('privacy_status', 'public'),
       supabase.from('recal_videos').select('*', { count: 'exact', head: true }).eq('status', 'active').eq('privacy_status', 'private'),
       supabase.from('recal_videos').select('*', { count: 'exact', head: true }).eq('status', 'active').eq('is_live', true),
+      supabase.from('recal_videos').select('*', { count: 'exact', head: true }).eq('status', 'active').neq('transcript', '').not('transcript', 'is', null),
+      supabase.from('recal_videos').select('*', { count: 'exact', head: true }).eq('status', 'active').eq('transcript', ''),
     ]);
 
     // Fetch all active records without the 1000 limit for exact duration and file size sums
@@ -202,6 +214,8 @@ export async function GET(request: Request) {
         public: publicCountRes.count || 0,
         private: privateCountRes.count || 0,
         live: liveCountRes.count || 0,
+        transcripts: transcriptsCountRes.count || 0,
+        silent: silentCountRes.count || 0,
         totalDurationSeconds,
         totalFileSizeBytes,
         totalViews,
