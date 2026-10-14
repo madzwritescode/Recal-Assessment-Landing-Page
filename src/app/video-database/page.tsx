@@ -89,6 +89,8 @@ export default function VideoDatabasePage() {
 
   // Filters & Search
   const [search, setSearch] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
+  const [initialLoading, setInitialLoading] = useState<boolean>(true);
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [privacyFilter, setPrivacyFilter] = useState<string>("all");
   const [durationFilter, setDurationFilter] = useState<string>("all");
@@ -152,12 +154,20 @@ export default function VideoDatabasePage() {
     }
   }, []);
 
+  // Debounce search query to prevent rapid refetches on every single keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   // Fetch videos with current filters
   const fetchVideos = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        search,
+        search: debouncedSearch,
         search_mode: searchMode,
         source: sourceFilter,
         privacy: privacyFilter,
@@ -186,26 +196,16 @@ export default function VideoDatabasePage() {
       console.error("Error loading videos:", err);
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
-  }, [search, searchMode, sourceFilter, privacyFilter, durationFilter, liveFilter, transcriptFilter, sortBy, page, limit]);
+  }, [debouncedSearch, searchMode, sourceFilter, privacyFilter, durationFilter, liveFilter, transcriptFilter, sortBy, page, limit]);
 
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchVideos();
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [fetchVideos]);
-
-  // Live auto-refresh stats every 12 seconds so counters tick up in real time
-  useEffect(() => {
-    const pollTimer = setInterval(() => {
-      fetchVideos();
-    }, 12000);
-    return () => clearInterval(pollTimer);
+    fetchVideos();
   }, [fetchVideos]);
 
   // Handle URL auth params
@@ -843,6 +843,24 @@ export default function VideoDatabasePage() {
               </span>
             )}
 
+            {/* Refresh Button */}
+            <button
+              onClick={() => fetchVideos()}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-xs text-[#E2E8F0] font-medium transition disabled:opacity-50 cursor-pointer"
+              title="Refresh video database"
+            >
+              <svg
+                className={`w-3.5 h-3.5 ${loading ? "animate-spin text-blue-400" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Refresh</span>
+            </button>
+
             {/* Export CSV */}
             <button
               onClick={handleExportCsv}
@@ -1037,9 +1055,13 @@ export default function VideoDatabasePage() {
                 {/* Search Input */}
                 <div className="relative flex-1">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#64748B]">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+                    {loading ? (
+                      <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    )}
                   </span>
                   <input
                     type="text"
@@ -1062,9 +1084,11 @@ export default function VideoDatabasePage() {
                       <button
                         onClick={() => {
                           setSearch("");
+                          setDebouncedSearch("");
                           setPage(1);
                         }}
-                        className="p-1 text-[#64748B] hover:text-white text-xs mr-1"
+                        className="p-1 text-[#64748B] hover:text-white text-xs mr-1 cursor-pointer"
+                        title="Clear search"
                       >
                         ✕
                       </button>
@@ -1313,7 +1337,7 @@ export default function VideoDatabasePage() {
         </div>
 
         {/* Video Catalog View */}
-        {loading ? (
+        {initialLoading ? (
           <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-12 text-center space-y-3">
             <div className="inline-block w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-sm text-[#94A3B8]">Loading video assets from database...</p>
@@ -1334,7 +1358,7 @@ export default function VideoDatabasePage() {
           </div>
         ) : viewMode === "table" ? (
           /* Table View */
-          <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl overflow-hidden shadow-sm">
+          <div className={`bg-[#131B2E] border border-[#1E293B] rounded-xl overflow-hidden shadow-sm transition-opacity duration-200 ${loading ? "opacity-60" : "opacity-100"}`}>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#0E1526] text-[#94A3B8] uppercase text-[10px] tracking-wider border-b border-[#1E293B]">
@@ -1549,7 +1573,7 @@ export default function VideoDatabasePage() {
           </div>
         ) : (
           /* Grid / Card View */
-          <div className="space-y-6">
+          <div className={`space-y-6 transition-opacity duration-200 ${loading ? "opacity-60" : "opacity-100"}`}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {displayedVideos.map((video) => {
                 const cls = classifyVideo(video.title, video.folder_path || "", video.duration_seconds);
