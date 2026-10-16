@@ -393,32 +393,68 @@
   function submitToGoogleForm(computed) {
     const { result, strongest, weakest } = computed;
 
-    const body = new URLSearchParams({
-      'entry.1858000121': formData.firstName,
-      'entry.488433054':  formData.email,
-      'entry.2039481145': formData.age,
-      'entry.489393189':  formData.gender,
-      'entry.1880815041': formData.boltScore,
-      'entry.2062254424': formData.co2ttScore,
-      'entry.837325677':  formData.mbtSteps,
-      'entry.104410554':  formData.lomZone,
-      'entry.496427865':  formData.balloon,
-      'entry.357800876':  formData.goalType,
-      'entry.1823589595': formData.goalDetail,
-      'entry.1740075512': String(result.score),
-      'entry.556042623':  result.grade,
-      'entry.1504433363': result.badge,
-      'entry.2096312707': strongest.name,
-      'entry.1078081452': weakest.name,
-    });
+    const payload = {
+      firstName: formData.firstName,
+      email: formData.email,
+      age: formData.age,
+      gender: formData.gender,
+      boltScore: formData.boltScore,
+      co2ttScore: formData.co2ttScore,
+      mbtSteps: formData.mbtSteps,
+      lomZone: formData.lomZone,
+      balloon: formData.balloon,
+      goalType: formData.goalType,
+      goalDetail: formData.goalDetail,
+      score: result.score,
+      grade: result.grade,
+      badge: result.badge,
+      strongest: strongest.name,
+      weakest: weakest.name,
+    };
 
-    // Fire-and-forget — no-cors means we never read the response.
-    // Google Forms still records the submission.
-    fetch(RBI_FORM_URL, {
+    // Primary: Submit via server-side proxy (bypasses browser CORS, ITP & ad blockers)
+    fetch('/api/submit-srs-rbi', {
       method: 'POST',
-      mode:   'no-cors',
-      body,
-    }).catch(e => console.warn('[RBI] form submission warning:', e));
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(res => {
+      if (!res.ok) throw new Error('Proxy status: ' + res.status);
+      console.log('[RBI] Successfully submitted via server route');
+    }).catch(err => {
+      console.warn('[RBI] Server route failed, falling back to direct submit:', err);
+
+      // Fallback: Direct submit with sanitized fields
+      const combinedGoal = formData.goalDetail
+        ? (formData.goalType ? formData.goalType + ' - ' + formData.goalDetail : formData.goalDetail)
+        : (formData.goalType || '');
+
+      const body = new URLSearchParams({
+        'fvv': '1',
+        'draftResponse': '[]',
+        'pageHistory': '0',
+        'entry.1858000121': formData.firstName || '',
+        'entry.488433054':  formData.email || '',
+        'entry.2039481145': formData.age || '',
+        'entry.489393189':  formData.gender || '',
+        'entry.1880815041': formData.boltScore || '',
+        'entry.2062254424': formData.co2ttScore || '',
+        'entry.837325677':  formData.mbtSteps || '',
+        'entry.104410554':  formData.lomZone || '',
+        'entry.496427865':  formData.balloon || '',
+        'entry.357800876':  combinedGoal,
+        'entry.1740075512': String(result.score),
+        'entry.556042623':  result.grade,
+        'entry.1504433363': result.badge,
+        'entry.2096312707': strongest.name,
+        'entry.1078081452': weakest.name,
+      });
+
+      fetch(RBI_FORM_URL, {
+        method: 'POST',
+        mode:   'no-cors',
+        body,
+      }).catch(e => console.warn('[RBI] fallback form submission warning:', e));
+    });
   }
 
   function showLoading() {

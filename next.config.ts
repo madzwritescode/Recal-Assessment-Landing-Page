@@ -43,6 +43,14 @@ const nextConfig: NextConfig = {
         destination: "/srs-rbi/index.html",
       },
       {
+        source: "/srs-1",
+        destination: "/srs-rbi/index.html",
+      },
+      {
+        source: "/srs-1/",
+        destination: "/srs-rbi/index.html",
+      },
+      {
         source: "/partnerships",
         destination: "/partnerships/index.html",
       },
