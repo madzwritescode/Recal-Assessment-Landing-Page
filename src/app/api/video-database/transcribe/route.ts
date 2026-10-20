@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getDriveClient, getGoogleDriveCredentials } from '@/lib/video-sync/drive-credentials';
+import { getGoogleDriveCredentials } from '@/lib/video-sync/drive-credentials';
 
 export const dynamic = 'force-dynamic';
 

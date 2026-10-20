@@ -1,49 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import {
+  VideoAnnotation,
+  formatSecondsToTimestamp as formatTimestamp,
+} from '@/lib/video-sync/annotations';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
 
-export type AnnotationUsageStatus = 'unused' | 'in_progress' | 'used';
-
-export interface VideoAnnotation {
-  id: string;
-  video_source_id: string;
-  video_source: 'youtube' | 'gdrive';
-  video_title: string;
-  video_folder_path?: string | null;
-  video_direct_url: string;
-  video_thumbnail_url?: string | null;
-  start_seconds: number;
-  start_formatted: string;
-  end_seconds?: number | null;
-  end_formatted?: string | null;
-  topic: string;
-  comment: string;
-  author: string;
-  status: AnnotationUsageStatus;
-  used_for?: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 const SETTINGS_KEY = 'video_annotations_v1';
-
-export function formatTimestamp(seconds: number | null | undefined): string {
-  if (seconds === null || seconds === undefined || isNaN(seconds) || seconds < 0) {
-    return '00:00';
-  }
-  const totalSec = Math.floor(seconds);
-  const hrs = Math.floor(totalSec / 3600);
-  const mins = Math.floor((totalSec % 3600) / 60);
-  const secs = totalSec % 60;
-
-  const pad = (n: number) => String(n).padStart(2, '0');
-  if (hrs > 0) {
-    return `${hrs}:${pad(mins)}:${pad(secs)}`;
-  }
-  return `${pad(mins)}:${pad(secs)}`;
-}
 
 async function loadAllAnnotations(): Promise<VideoAnnotation[]> {
   try {
