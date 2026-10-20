@@ -105,6 +105,7 @@ export default function VideoDatabasePage() {
   const [editingTopic, setEditingTopic] = useState<string>("");
   const [editingComment, setEditingComment] = useState<string>("");
   const [editingUsedFor, setEditingUsedFor] = useState<string>("");
+  const [downloadingClipId, setDownloadingClipId] = useState<string | null>(null);
 
   // Research Tab: Outliers
   const [outlierKeyword, setOutlierKeyword] = useState<string>("High Altitude Breathwork");
@@ -581,6 +582,66 @@ export default function VideoDatabasePage() {
       });
     } catch (err) {
       console.error("Failed to delete annotation:", err);
+    }
+  };
+
+  // Trim and download the exact annotated video clip locally as an .mp4 file
+  const handleDownloadAnnotationClip = async (ann: VideoAnnotation) => {
+    if (ann.video_source !== "gdrive") {
+      window.open(
+        `https://www.youtube.com/watch?v=${ann.video_source_id}&t=${ann.start_seconds}s`,
+        "_blank",
+        "noopener,noreferrer"
+      );
+      return;
+    }
+
+    setDownloadingClipId(ann.id);
+    try {
+      const endSec =
+        ann.end_seconds !== null && ann.end_seconds !== undefined && ann.end_seconds > ann.start_seconds
+          ? ann.end_seconds
+          : ann.start_seconds + 30;
+
+      const params = new URLSearchParams({
+        fileId: ann.video_source_id,
+        start: String(ann.start_seconds),
+        end: String(endSec),
+        title: ann.video_title,
+        topic: ann.topic,
+      });
+
+      const res = await fetch(`/api/video-database/clip?${params.toString()}`);
+      if (!res.ok) {
+        let errText = "Failed to extract clip";
+        try {
+          const errJson = await res.json();
+          if (errJson.error) errText = errJson.error;
+        } catch {}
+        alert(`Could not download clip: ${errText}`);
+        return;
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename =
+        match?.[1] ||
+        `${ann.video_title.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 40)}_${ann.start_formatted.replace(/:/g, "m")}s.mp4`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (err) {
+      console.error("Clip download failed:", err);
+      alert("Error downloading video clip. Please try again.");
+    } finally {
+      setDownloadingClipId(null);
     }
   };
 
@@ -2477,6 +2538,40 @@ export default function VideoDatabasePage() {
                             {/* Actions */}
                             <td className="py-3.5 px-4 text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1.5">
+                                {ann.video_source === "gdrive" ? (
+                                  <button
+                                    onClick={() => handleDownloadAnnotationClip(ann)}
+                                    disabled={downloadingClipId === ann.id}
+                                    className="px-2.5 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/35 disabled:opacity-50 text-emerald-300 border border-emerald-500/40 text-[11px] font-semibold transition cursor-pointer flex items-center gap-1"
+                                    title={
+                                      ann.end_formatted
+                                        ? `Download trimmed MP4 clip (${ann.start_formatted} – ${ann.end_formatted})`
+                                        : `Download 30s MP4 clip starting at ${ann.start_formatted}`
+                                    }
+                                  >
+                                    {downloadingClipId === ann.id ? (
+                                      <>
+                                        <span className="w-3 h-3 border-2 border-emerald-300 border-t-transparent rounded-full animate-spin inline-block"></span>
+                                        <span>Cutting MP4...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span>⬇</span>
+                                        <span>{ann.end_formatted ? "Download Clip" : "Download 30s Clip"}</span>
+                                      </>
+                                    )}
+                                  </button>
+                                ) : (
+                                  <a
+                                    href={`https://www.youtube.com/watch?v=${ann.video_source_id}&t=${ann.start_seconds}s`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-2.5 py-1 rounded bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 text-[11px] font-medium transition"
+                                    title="Open YouTube at this exact timestamp"
+                                  >
+                                    ↗ YouTube @ {ann.start_formatted}
+                                  </a>
+                                )}
                                 <button
                                   onClick={() => handleOpenAnnotationClip(ann)}
                                   className="px-2.5 py-1 rounded bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[11px] font-medium transition cursor-pointer"
@@ -3345,6 +3440,32 @@ export default function VideoDatabasePage() {
                                   </div>
 
                                   <div className="flex items-center gap-1.5">
+                                    {ann.video_source === "gdrive" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDownloadAnnotationClip(ann)}
+                                        disabled={downloadingClipId === ann.id}
+                                        className="px-2 py-0.5 rounded bg-emerald-600/20 hover:bg-emerald-600/35 disabled:opacity-50 text-emerald-300 border border-emerald-500/40 text-[10px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                                        title={
+                                          ann.end_formatted
+                                            ? `Download trimmed MP4 clip (${ann.start_formatted} – ${ann.end_formatted})`
+                                            : `Download 30s MP4 clip starting at ${ann.start_formatted}`
+                                        }
+                                      >
+                                        {downloadingClipId === ann.id ? (
+                                          <>
+                                            <span className="w-2.5 h-2.5 border-2 border-emerald-300 border-t-transparent rounded-full animate-spin inline-block"></span>
+                                            <span>Cutting...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <span>⬇</span>
+                                            <span>{ann.end_formatted ? "Download MP4" : "Download 30s"}</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    )}
+
                                     <select
                                       value={ann.status}
                                       onChange={(e) =>

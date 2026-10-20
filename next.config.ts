@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["ffmpeg-static"],
+  outputFileTracingIncludes: {
+    "/api/video-database/clip": ["./node_modules/ffmpeg-static/**/*"],
+  },
   async redirects() {
     return [
       // Redirect old slug to new one (in case anyone bookmarked it)
