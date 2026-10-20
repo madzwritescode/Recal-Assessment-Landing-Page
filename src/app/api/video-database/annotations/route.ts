@@ -24,7 +24,21 @@ async function loadAllAnnotations(): Promise<VideoAnnotation[]> {
 
     const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
     if (Array.isArray(parsed)) {
-      return parsed;
+      return parsed.map((item: VideoAnnotation) => {
+        if (
+          item.end_seconds !== null &&
+          item.end_seconds !== undefined &&
+          item.end_seconds <= item.start_seconds
+        ) {
+          const fixedEnd = item.start_seconds + 30;
+          return {
+            ...item,
+            end_seconds: fixedEnd,
+            end_formatted: formatTimestamp(fixedEnd),
+          };
+        }
+        return item;
+      });
     }
     return [];
   } catch (err) {
@@ -133,10 +147,20 @@ export async function POST(req: NextRequest) {
     }
 
     const startSec = Math.max(0, Number(start_seconds) || 0);
-    const endSec =
-      end_seconds !== undefined && end_seconds !== null && end_seconds !== ''
-        ? Math.max(startSec, Number(end_seconds))
-        : null;
+    let endSec: number | null = null;
+    if (end_seconds !== undefined && end_seconds !== null && end_seconds !== '') {
+      const parsedEnd = Number(end_seconds);
+      if (!isNaN(parsedEnd) && parsedEnd > startSec) {
+        endSec = parsedEnd;
+      } else if (!isNaN(parsedEnd) && parsedEnd > 0 && parsedEnd <= startSec) {
+        return NextResponse.json(
+          {
+            error: `End time (${formatTimestamp(parsedEnd)}) must be after Start time (${formatTimestamp(startSec)}).`,
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     const now = new Date().toISOString();
     const newAnnotation: VideoAnnotation = {
@@ -210,12 +234,24 @@ export async function PATCH(req: NextRequest) {
     const current = existing[idx];
     const nextStart =
       start_seconds !== undefined ? Math.max(0, Number(start_seconds) || 0) : current.start_seconds;
-    const nextEnd =
-      end_seconds !== undefined
-        ? end_seconds === null || end_seconds === ''
-          ? null
-          : Math.max(nextStart, Number(end_seconds))
-        : current.end_seconds;
+    let nextEnd = current.end_seconds;
+    if (end_seconds !== undefined) {
+      if (end_seconds === null || end_seconds === '') {
+        nextEnd = null;
+      } else {
+        const parsedEnd = Number(end_seconds);
+        if (!isNaN(parsedEnd) && parsedEnd > nextStart) {
+          nextEnd = parsedEnd;
+        } else {
+          return NextResponse.json(
+            {
+              error: `End time (${formatTimestamp(parsedEnd)}) must be after Start time (${formatTimestamp(nextStart)}).`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
 
     const updatedItem: VideoAnnotation = {
       ...current,

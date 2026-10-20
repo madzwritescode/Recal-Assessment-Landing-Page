@@ -87,6 +87,12 @@ export default function VideoDatabasePage() {
   const [playerCurrentTime, setPlayerCurrentTime] = useState<number>(0);
   const [drivePlayerMode, setDrivePlayerMode] = useState<"native" | "embed">("native");
   const [youtubeStartSeconds, setYoutubeStartSeconds] = useState<number>(0);
+  const [youtubeEndSeconds, setYoutubeEndSeconds] = useState<number | null>(null);
+  const [activeClipRange, setActiveClipRange] = useState<{
+    id?: string;
+    start: number;
+    end: number | null;
+  } | null>(null);
 
   // New Annotation Form State (inside Drawer)
   const [annStartInput, setAnnStartInput] = useState<string>("00:00");
@@ -270,7 +276,7 @@ export default function VideoDatabasePage() {
     fetchVideos();
   }, [fetchVideos]);
 
-  // Listen to YouTube IFrame Player postMessage events for live timestamp tracking
+  // Listen to YouTube IFrame Player postMessage events for live timestamp tracking & clip end auto-pause
   useEffect(() => {
     if (!selectedVideo || selectedVideo.source !== "youtube") return;
 
@@ -279,7 +285,19 @@ export default function VideoDatabasePage() {
       try {
         const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
         if (data?.event === "infoDelivery" && typeof data?.info?.currentTime === "number") {
-          setPlayerCurrentTime(Math.floor(data.info.currentTime));
+          const curSec = Math.floor(data.info.currentTime);
+          setPlayerCurrentTime(curSec);
+
+          if (
+            activeClipRange?.end !== null &&
+            activeClipRange?.end !== undefined &&
+            data.info.currentTime >= activeClipRange.end
+          ) {
+            youtubeIframeRef.current?.contentWindow?.postMessage(
+              JSON.stringify({ event: "command", func: "pauseVideo", args: [] }),
+              "*"
+            );
+          }
         }
       } catch {
         // Ignore non-JSON postMessages
@@ -302,7 +320,7 @@ export default function VideoDatabasePage() {
       window.removeEventListener("message", handleMessage);
       clearInterval(timer);
     };
-  }, [selectedVideo]);
+  }, [selectedVideo, activeClipRange]);
 
   // Group annotations by video_source_id for fast badge lookup in catalog
   const annotationsByVideo = useMemo(() => {
@@ -358,15 +376,61 @@ export default function VideoDatabasePage() {
     });
   }, [annotations, annStatusFilter, annTopicFilter, annSourceFilter, annSearchQuery]);
 
-  // Seek current Drawer video player to specific seconds
+  // Smart capture helpers for Start Time and End Time so End Time is never stuck <= Start Time
+  const handleCaptureStartTime = useCallback(
+    (sec: number) => {
+      const targetStart = Math.max(0, Math.floor(sec));
+      const prevStart = parseTimestampInput(annStartInput) ?? 0;
+      const prevEnd = annEndInput.trim() ? parseTimestampInput(annEndInput) : null;
+
+      setAnnStartInput(formatSecondsToTimestamp(targetStart));
+      setAnnError(null);
+
+      // If the user already set an End Time (e.g. via +15s/+30s/+60s) before capturing Start Time,
+      // preserve that clip duration relative to the new Start Time so End Time doesn't stay behind Start Time!
+      if (prevEnd !== null) {
+        const prevDuration = prevEnd > prevStart ? prevEnd - prevStart : 30;
+        if (prevEnd <= targetStart || prevStart === 0) {
+          setAnnEndInput(formatSecondsToTimestamp(targetStart + prevDuration));
+        }
+      }
+    },
+    [annStartInput, annEndInput]
+  );
+
+  const handleCaptureEndTime = useCallback(
+    (sec: number) => {
+      const currentStart = parseTimestampInput(annStartInput) ?? 0;
+      const rawEnd = Math.max(0, Math.floor(sec));
+      setAnnError(null);
+
+      // If the video is paused at or before Start Time when clicking Capture End, advance by 30s instead of setting End == Start
+      if (rawEnd <= currentStart) {
+        setAnnEndInput(formatSecondsToTimestamp(currentStart + 30));
+      } else {
+        setAnnEndInput(formatSecondsToTimestamp(rawEnd));
+      }
+    },
+    [annStartInput]
+  );
+
+  // Seek current Drawer video player to specific [startSeconds, endSeconds] clip range
   const seekPlayerTo = useCallback(
-    (seconds: number) => {
-      const targetSec = Math.max(0, Math.floor(seconds));
+    (startSeconds: number, endSeconds?: number | null, clipId?: string) => {
+      const targetSec = Math.max(0, Math.floor(startSeconds));
+      const validEnd =
+        endSeconds !== null && endSeconds !== undefined && endSeconds > targetSec
+          ? Math.floor(endSeconds)
+          : null;
+
       setPlayerCurrentTime(targetSec);
+      setActiveClipRange({ id: clipId, start: targetSec, end: validEnd });
 
       if (!selectedVideo) return;
 
       if (selectedVideo.source === "youtube") {
+        setYoutubeStartSeconds(targetSec);
+        setYoutubeEndSeconds(validEnd);
         if (youtubeIframeRef.current?.contentWindow) {
           youtubeIframeRef.current.contentWindow.postMessage(
             JSON.stringify({ event: "command", func: "seekTo", args: [targetSec, true] }),
@@ -376,8 +440,6 @@ export default function VideoDatabasePage() {
             JSON.stringify({ event: "command", func: "playVideo", args: [] }),
             "*"
           );
-        } else {
-          setYoutubeStartSeconds(targetSec);
         }
       } else {
         if (drivePlayerMode === "native" && driveVideoRef.current) {
@@ -398,7 +460,7 @@ export default function VideoDatabasePage() {
     [selectedVideo, drivePlayerMode]
   );
 
-  // Open any video from the Global Annotations Queue and jump straight to its clip timestamp
+  // Open any video from the Global Annotations Queue and jump straight to its clip [start, end] range
   const handleOpenAnnotationClip = useCallback(
     (ann: VideoAnnotation) => {
       const found = videos.find((v) => v.source_id === ann.video_source_id);
@@ -415,9 +477,16 @@ export default function VideoDatabasePage() {
         status: "active",
       };
 
+      const validEnd =
+        ann.end_seconds !== null && ann.end_seconds !== undefined && ann.end_seconds > ann.start_seconds
+          ? ann.end_seconds
+          : null;
+
       setSelectedVideo(record);
       setYoutubeStartSeconds(ann.start_seconds);
+      setYoutubeEndSeconds(validEnd);
       setPlayerCurrentTime(ann.start_seconds);
+      setActiveClipRange({ id: ann.id, start: ann.start_seconds, end: validEnd });
 
       setTimeout(() => {
         if (record.source === "gdrive" && driveVideoRef.current) {
@@ -448,6 +517,17 @@ export default function VideoDatabasePage() {
     const parsedEnd = annEndInput.trim() ? parseTimestampInput(annEndInput) : null;
     if (annEndInput.trim() && parsedEnd === null) {
       setAnnError("Please enter a valid end timestamp (e.g. 02:15) or leave blank.");
+      return;
+    }
+
+    // If the user typed a short number/offset (e.g. "30" or "00:30") into End Time that is <= Start Time,
+    // or if End Time is accidentally <= Start Time, alert them clearly so it never saves Start == End!
+    if (parsedEnd !== null && parsedEnd <= parsedStart) {
+      setAnnError(
+        `End Time (${formatSecondsToTimestamp(parsedEnd)}) must be after Start Time (${formatSecondsToTimestamp(
+          parsedStart
+        )}). Click +15s / +30s / +60s or scrub the player forward before capturing End Time.`
+      );
       return;
     }
 
@@ -772,13 +852,15 @@ export default function VideoDatabasePage() {
       setVidiqTranscript(selectedVideo.transcript || null);
     } else {
       setVidiqTranscript(null);
+      setActiveClipRange(null);
+      setYoutubeStartSeconds(0);
+      setYoutubeEndSeconds(null);
+      setPlayerCurrentTime(0);
     }
     setVidiqTitleScore(null);
     setVidiqSuggestedTitles([]);
     setTranscriptSearch("");
     setVidiqToolError(null);
-    setPlayerCurrentTime(0);
-    setYoutubeStartSeconds(0);
     setAnnStartInput("00:00");
     setAnnEndInput("");
     setAnnComment("");
@@ -2991,7 +3073,7 @@ export default function VideoDatabasePage() {
                       ref={youtubeIframeRef}
                       src={`https://www.youtube.com/embed/${selectedVideo.source_id}?autoplay=1&enablejsapi=1&rel=0${
                         youtubeStartSeconds > 0 ? `&start=${youtubeStartSeconds}` : ""
-                      }`}
+                      }${youtubeEndSeconds && youtubeEndSeconds > youtubeStartSeconds ? `&end=${youtubeEndSeconds}` : ""}`}
                       title={selectedVideo.title}
                       className="w-full h-full border-0"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -3007,7 +3089,18 @@ export default function VideoDatabasePage() {
                       autoPlay
                       playsInline
                       onTimeUpdate={(e) => {
-                        setPlayerCurrentTime(Math.floor(e.currentTarget.currentTime));
+                        const cur = e.currentTarget.currentTime;
+                        setPlayerCurrentTime(Math.floor(cur));
+
+                        // If playing a saved clip with an End Time, automatically stop at End Time
+                        if (
+                          activeClipRange?.end !== null &&
+                          activeClipRange?.end !== undefined &&
+                          cur >= activeClipRange.end
+                        ) {
+                          e.currentTarget.pause();
+                          e.currentTarget.currentTime = activeClipRange.end;
+                        }
                       }}
                       onError={() => {
                         // Automatically fallback to Google Drive embed if codec/stream unsupported
@@ -3043,7 +3136,7 @@ export default function VideoDatabasePage() {
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => setAnnStartInput(formatSecondsToTimestamp(playerCurrentTime))}
+                        onClick={() => handleCaptureStartTime(playerCurrentTime)}
                         className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold transition cursor-pointer"
                         title="Capture current player time as Clip Start"
                       >
@@ -3051,29 +3144,75 @@ export default function VideoDatabasePage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setAnnEndInput(formatSecondsToTimestamp(playerCurrentTime))}
+                        onClick={() => handleCaptureEndTime(playerCurrentTime)}
                         className="px-2.5 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[11px] font-semibold transition cursor-pointer"
                         title="Capture current player time as Clip End"
                       >
-                        🏁 Capture End
+                        🏁 Capture End ({formatSecondsToTimestamp(playerCurrentTime)})
                       </button>
                     </div>
                   </div>
+
+                  {/* Active Clip Range Playback Banner */}
+                  {activeClipRange && (
+                    <div className="px-2.5 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-between gap-2 text-[11px]">
+                      <span className="text-emerald-300 font-medium flex items-center gap-1.5">
+                        <span>🎬</span>
+                        <span>
+                          Playing Clip:{" "}
+                          <strong className="font-mono">
+                            {formatSecondsToTimestamp(activeClipRange.start)}
+                            {activeClipRange.end !== null
+                              ? ` → ${formatSecondsToTimestamp(activeClipRange.end)} (${
+                                  activeClipRange.end - activeClipRange.start
+                                }s)`
+                              : ""}
+                          </strong>
+                          {activeClipRange.end !== null && (
+                            <span className="text-emerald-400/80 ml-1">
+                              • Auto-stops at {formatSecondsToTimestamp(activeClipRange.end)}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => seekPlayerTo(activeClipRange.start, activeClipRange.end, activeClipRange.id)}
+                          className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-semibold cursor-pointer"
+                        >
+                          🔁 Replay Clip
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveClipRange(null);
+                            setYoutubeEndSeconds(null);
+                          }}
+                          className="px-1.5 py-0.5 rounded hover:bg-[#1E293B] text-slate-300 cursor-pointer"
+                          title="Clear clip boundary and play full video"
+                        >
+                          ✕ Full Video
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Visual Annotated Clip Timeline Markers */}
                   {selectedVideoAnnotations.length > 0 && selectedVideo.duration_seconds > 0 && (
                     <div className="space-y-1 pt-1">
                       <div className="flex items-center justify-between text-[10px] text-[#64748B]">
                         <span>Annotated Segments on Timeline ({selectedVideoAnnotations.length})</span>
-                        <span>Click any marker to jump</span>
+                        <span>Click any marker to play segment</span>
                       </div>
                       <div className="relative h-2.5 w-full rounded-full bg-[#0B0F17] border border-[#1E293B] overflow-hidden">
                         {selectedVideoAnnotations.map((ann) => {
                           const totalDur = Math.max(1, selectedVideo.duration_seconds);
                           const leftPct = Math.min(98, Math.max(0, (ann.start_seconds / totalDur) * 100));
-                          const clipEnd = ann.end_seconds
-                            ? Math.max(ann.start_seconds + 3, ann.end_seconds)
-                            : ann.start_seconds + Math.max(10, totalDur * 0.03);
+                          const clipEnd =
+                            ann.end_seconds && ann.end_seconds > ann.start_seconds
+                              ? ann.end_seconds
+                              : ann.start_seconds + Math.max(15, totalDur * 0.03);
                           const widthPct = Math.min(100 - leftPct, Math.max(2, ((clipEnd - ann.start_seconds) / totalDur) * 100));
                           const barColor =
                             ann.status === "used"
@@ -3086,7 +3225,7 @@ export default function VideoDatabasePage() {
                             <button
                               key={ann.id}
                               type="button"
-                              onClick={() => seekPlayerTo(ann.start_seconds)}
+                              onClick={() => seekPlayerTo(ann.start_seconds, ann.end_seconds, ann.id)}
                               style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                               className={`absolute top-0 bottom-0 ${barColor} opacity-85 hover:opacity-100 transition cursor-pointer rounded-sm`}
                               title={`${ann.start_formatted}${ann.end_formatted ? ` – ${ann.end_formatted}` : ""} [${ann.topic}]: ${ann.comment}`}
@@ -3199,7 +3338,7 @@ export default function VideoDatabasePage() {
                         <label className="text-[10px] uppercase font-bold text-[#94A3B8]">Start Time (MM:SS) *</label>
                         <button
                           type="button"
-                          onClick={() => setAnnStartInput(formatSecondsToTimestamp(playerCurrentTime))}
+                          onClick={() => handleCaptureStartTime(playerCurrentTime)}
                           className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer"
                         >
                           📍 Use {formatSecondsToTimestamp(playerCurrentTime)}
@@ -3217,7 +3356,7 @@ export default function VideoDatabasePage() {
                     {/* End Timestamp (Optional) + Quick Offset Buttons */}
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] uppercase font-bold text-[#94A3B8]">End Time (Optional)</label>
+                        <label className="text-[10px] uppercase font-bold text-[#94A3B8]">End Time (MM:SS)</label>
                         <div className="flex items-center gap-1">
                           {[15, 30, 60].map((secOffset) => (
                             <button
@@ -3226,6 +3365,7 @@ export default function VideoDatabasePage() {
                               onClick={() => {
                                 const base = parseTimestampInput(annStartInput) ?? playerCurrentTime;
                                 setAnnEndInput(formatSecondsToTimestamp(base + secOffset));
+                                setAnnError(null);
                               }}
                               className="px-1.5 py-0.2 rounded bg-[#1E293B] hover:bg-[#334155] text-[9px] font-mono text-slate-300 cursor-pointer"
                             >
@@ -3234,10 +3374,10 @@ export default function VideoDatabasePage() {
                           ))}
                           <button
                             type="button"
-                            onClick={() => setAnnEndInput(formatSecondsToTimestamp(playerCurrentTime))}
+                            onClick={() => handleCaptureEndTime(playerCurrentTime)}
                             className="text-[10px] text-blue-400 hover:text-blue-300 font-semibold ml-1 cursor-pointer"
                           >
-                            🏁 Now
+                            🏁 Now ({formatSecondsToTimestamp(playerCurrentTime)})
                           </button>
                         </div>
                       </div>
@@ -3423,14 +3563,24 @@ export default function VideoDatabasePage() {
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <button
                                       type="button"
-                                      onClick={() => seekPlayerTo(ann.start_seconds)}
-                                      className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-mono text-xs font-bold flex items-center gap-1 transition cursor-pointer"
-                                      title="Click to jump video player to this timestamp"
+                                      onClick={() => seekPlayerTo(ann.start_seconds, ann.end_seconds, ann.id)}
+                                      className={`px-2.5 py-1 rounded-lg border font-mono text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                                        activeClipRange?.id === ann.id
+                                          ? "bg-emerald-500/30 text-white border-emerald-400 ring-1 ring-emerald-400/50"
+                                          : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/30"
+                                      }`}
+                                      title={
+                                        ann.end_seconds && ann.end_seconds > ann.start_seconds
+                                          ? `Click to play clip from ${ann.start_formatted} to ${ann.end_formatted} (auto-stops at ${ann.end_formatted})`
+                                          : `Click to jump video player to ${ann.start_formatted}`
+                                      }
                                     >
                                       <span>▶</span>
                                       <span>
                                         {ann.start_formatted}
-                                        {ann.end_formatted ? ` – ${ann.end_formatted}` : ""}
+                                        {ann.end_formatted && ann.end_seconds && ann.end_seconds > ann.start_seconds
+                                          ? ` – ${ann.end_formatted} (${ann.end_seconds - ann.start_seconds}s)`
+                                          : ""}
                                       </span>
                                     </button>
 
