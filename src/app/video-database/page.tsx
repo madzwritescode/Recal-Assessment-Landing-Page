@@ -1,10 +1,18 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { RecalVideoRecord } from "@/lib/supabase";
 import { classifyVideo } from "@/lib/video-sync/classifier";
+import {
+  VideoAnnotation,
+  AnnotationUsageStatus,
+  PRESET_ANNOTATION_TOPICS,
+  formatSecondsToTimestamp,
+  parseTimestampInput,
+  getStatusBadgeStyle,
+} from "@/lib/video-sync/annotations";
 
 interface VideoStats {
   total: number;
@@ -59,8 +67,44 @@ export default function VideoDatabasePage() {
   const [vidiqToolError, setVidiqToolError] = useState<string | null>(null);
 
   // Main Tab Navigation & Search Scope
-  const [activeMainTab, setActiveMainTab] = useState<"catalog" | "research">("catalog");
+  const [activeMainTab, setActiveMainTab] = useState<"catalog" | "annotations" | "research">("catalog");
   const [searchMode, setSearchMode] = useState<"all" | "metadata" | "transcript">("all");
+
+  // Video Annotations & Clip Repurposing State (Supabase-persisted)
+  const [annotations, setAnnotations] = useState<VideoAnnotation[]>([]);
+  const [annotationsLoading, setAnnotationsLoading] = useState<boolean>(false);
+  const [annotatedOnlyFilter, setAnnotatedOnlyFilter] = useState<boolean>(false);
+
+  // Annotations Tab Filters
+  const [annStatusFilter, setAnnStatusFilter] = useState<"all" | AnnotationUsageStatus>("all");
+  const [annTopicFilter, setAnnTopicFilter] = useState<string>("all");
+  const [annSourceFilter, setAnnSourceFilter] = useState<"all" | "youtube" | "gdrive">("all");
+  const [annSearchQuery, setAnnSearchQuery] = useState<string>("");
+
+  // Drawer Player & Timestamp Capture State
+  const driveVideoRef = useRef<HTMLVideoElement | null>(null);
+  const youtubeIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [playerCurrentTime, setPlayerCurrentTime] = useState<number>(0);
+  const [drivePlayerMode, setDrivePlayerMode] = useState<"native" | "embed">("native");
+  const [youtubeStartSeconds, setYoutubeStartSeconds] = useState<number>(0);
+
+  // New Annotation Form State (inside Drawer)
+  const [annStartInput, setAnnStartInput] = useState<string>("00:00");
+  const [annEndInput, setAnnEndInput] = useState<string>("");
+  const [annTopic, setAnnTopic] = useState<string>("Kilimanjaro");
+  const [annCustomTopic, setAnnCustomTopic] = useState<string>("");
+  const [annComment, setAnnComment] = useState<string>("");
+  const [annAuthor, setAnnAuthor] = useState<string>("Anthony");
+  const [annSaving, setAnnSaving] = useState<boolean>(false);
+  const [annError, setAnnError] = useState<string | null>(null);
+
+  // Editing Existing Annotation State
+  const [editingAnnId, setEditingAnnId] = useState<string | null>(null);
+  const [editingStartInput, setEditingStartInput] = useState<string>("");
+  const [editingEndInput, setEditingEndInput] = useState<string>("");
+  const [editingTopic, setEditingTopic] = useState<string>("");
+  const [editingComment, setEditingComment] = useState<string>("");
+  const [editingUsedFor, setEditingUsedFor] = useState<string>("");
 
   // Research Tab: Outliers
   const [outlierKeyword, setOutlierKeyword] = useState<string>("High Altitude Breathwork");
@@ -200,13 +244,400 @@ export default function VideoDatabasePage() {
     }
   }, [debouncedSearch, searchMode, sourceFilter, privacyFilter, durationFilter, liveFilter, transcriptFilter, sortBy, page, limit]);
 
+  // Fetch all persisted video annotations from Supabase
+  const fetchAnnotations = useCallback(async () => {
+    setAnnotationsLoading(true);
+    try {
+      const res = await fetch("/api/video-database/annotations");
+      if (res.ok) {
+        const data = await res.json();
+        setAnnotations(Array.isArray(data.annotations) ? data.annotations : []);
+      }
+    } catch (err) {
+      console.error("Error fetching annotations:", err);
+    } finally {
+      setAnnotationsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchStatus();
-  }, [fetchStatus]);
+    fetchAnnotations();
+  }, [fetchStatus, fetchAnnotations]);
 
   useEffect(() => {
     fetchVideos();
   }, [fetchVideos]);
+
+  // Listen to YouTube IFrame Player postMessage events for live timestamp tracking
+  useEffect(() => {
+    if (!selectedVideo || selectedVideo.source !== "youtube") return;
+
+    const handleMessage = (event: MessageEvent) => {
+      if (!event.origin.includes("youtube")) return;
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data?.event === "infoDelivery" && typeof data?.info?.currentTime === "number") {
+          setPlayerCurrentTime(Math.floor(data.info.currentTime));
+        }
+      } catch {
+        // Ignore non-JSON postMessages
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+
+    // Poll / subscribe to YouTube iframe listening event once loaded
+    const timer = setInterval(() => {
+      if (youtubeIframeRef.current?.contentWindow) {
+        youtubeIframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: "listening", id: 1, channel: "widget" }),
+          "*"
+        );
+      }
+    }, 1500);
+
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      clearInterval(timer);
+    };
+  }, [selectedVideo]);
+
+  // Group annotations by video_source_id for fast badge lookup in catalog
+  const annotationsByVideo = useMemo(() => {
+    const map: Record<string, VideoAnnotation[]> = {};
+    for (const ann of annotations) {
+      if (!map[ann.video_source_id]) {
+        map[ann.video_source_id] = [];
+      }
+      map[ann.video_source_id].push(ann);
+    }
+    for (const vidId of Object.keys(map)) {
+      map[vidId].sort((a, b) => a.start_seconds - b.start_seconds);
+    }
+    return map;
+  }, [annotations]);
+
+  // Annotations for the currently open video in Drawer
+  const selectedVideoAnnotations = useMemo(() => {
+    if (!selectedVideo) return [];
+    return annotationsByVideo[selectedVideo.source_id] || [];
+  }, [selectedVideo, annotationsByVideo]);
+
+  // Global Annotation KPI Counts & Unique Topics
+  const annotationStats = useMemo(() => {
+    const total = annotations.length;
+    const unused = annotations.filter((a) => a.status === "unused").length;
+    const inProgress = annotations.filter((a) => a.status === "in_progress").length;
+    const used = annotations.filter((a) => a.status === "used").length;
+    const uniqueVideos = new Set(annotations.map((a) => a.video_source_id)).size;
+    return { total, unused, inProgress, used, uniqueVideos };
+  }, [annotations]);
+
+  const allAvailableTopics = useMemo(() => {
+    const set = new Set<string>(PRESET_ANNOTATION_TOPICS);
+    for (const a of annotations) {
+      if (a.topic) set.add(a.topic);
+    }
+    return Array.from(set);
+  }, [annotations]);
+
+  // Filtered annotations for the global "Annotated Clips Queue" tab
+  const filteredGlobalAnnotations = useMemo(() => {
+    const q = annSearchQuery.trim().toLowerCase();
+    return annotations.filter((a) => {
+      if (annStatusFilter !== "all" && a.status !== annStatusFilter) return false;
+      if (annTopicFilter !== "all" && a.topic.toLowerCase() !== annTopicFilter.toLowerCase()) return false;
+      if (annSourceFilter !== "all" && a.video_source !== annSourceFilter) return false;
+      if (q) {
+        const hay = `${a.comment} ${a.topic} ${a.video_title} ${a.author || ""} ${a.used_for || ""} ${a.video_folder_path || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [annotations, annStatusFilter, annTopicFilter, annSourceFilter, annSearchQuery]);
+
+  // Seek current Drawer video player to specific seconds
+  const seekPlayerTo = useCallback(
+    (seconds: number) => {
+      const targetSec = Math.max(0, Math.floor(seconds));
+      setPlayerCurrentTime(targetSec);
+
+      if (!selectedVideo) return;
+
+      if (selectedVideo.source === "youtube") {
+        if (youtubeIframeRef.current?.contentWindow) {
+          youtubeIframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: "command", func: "seekTo", args: [targetSec, true] }),
+            "*"
+          );
+          youtubeIframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: "command", func: "playVideo", args: [] }),
+            "*"
+          );
+        } else {
+          setYoutubeStartSeconds(targetSec);
+        }
+      } else {
+        if (drivePlayerMode === "native" && driveVideoRef.current) {
+          driveVideoRef.current.currentTime = targetSec;
+          driveVideoRef.current.play().catch(() => {});
+        } else {
+          // Switch to native mode and seek once loaded
+          setDrivePlayerMode("native");
+          setTimeout(() => {
+            if (driveVideoRef.current) {
+              driveVideoRef.current.currentTime = targetSec;
+              driveVideoRef.current.play().catch(() => {});
+            }
+          }, 300);
+        }
+      }
+    },
+    [selectedVideo, drivePlayerMode]
+  );
+
+  // Open any video from the Global Annotations Queue and jump straight to its clip timestamp
+  const handleOpenAnnotationClip = useCallback(
+    (ann: VideoAnnotation) => {
+      const found = videos.find((v) => v.source_id === ann.video_source_id);
+      const record: RecalVideoRecord = found || {
+        source: ann.video_source,
+        source_id: ann.video_source_id,
+        title: ann.video_title,
+        folder_path: ann.video_folder_path || "Recal Marketing",
+        direct_url: ann.video_direct_url,
+        thumbnail_url: ann.video_thumbnail_url || null,
+        privacy_status: "unlisted",
+        is_live: false,
+        duration_seconds: 0,
+        status: "active",
+      };
+
+      setSelectedVideo(record);
+      setYoutubeStartSeconds(ann.start_seconds);
+      setPlayerCurrentTime(ann.start_seconds);
+
+      setTimeout(() => {
+        if (record.source === "gdrive" && driveVideoRef.current) {
+          driveVideoRef.current.currentTime = ann.start_seconds;
+          driveVideoRef.current.play().catch(() => {});
+        } else if (record.source === "youtube" && youtubeIframeRef.current?.contentWindow) {
+          youtubeIframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: "command", func: "seekTo", args: [ann.start_seconds, true] }),
+            "*"
+          );
+        }
+      }, 450);
+    },
+    [videos]
+  );
+
+  // Create a new timestamped clip annotation
+  const handleAddAnnotation = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedVideo) return;
+
+    const parsedStart = parseTimestampInput(annStartInput);
+    if (parsedStart === null) {
+      setAnnError("Please enter a valid start timestamp (e.g. 01:30 or 90).");
+      return;
+    }
+
+    const parsedEnd = annEndInput.trim() ? parseTimestampInput(annEndInput) : null;
+    if (annEndInput.trim() && parsedEnd === null) {
+      setAnnError("Please enter a valid end timestamp (e.g. 02:15) or leave blank.");
+      return;
+    }
+
+    if (!annComment.trim()) {
+      setAnnError("Please add a comment or instruction for this clip (e.g. 'Use this portion for Kilimanjaro topic').");
+      return;
+    }
+
+    const resolvedTopic =
+      annTopic === "__custom__"
+        ? annCustomTopic.trim() || "General"
+        : annTopic || "General";
+
+    setAnnSaving(true);
+    setAnnError(null);
+
+    try {
+      const res = await fetch("/api/video-database/annotations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          video_source_id: selectedVideo.source_id,
+          video_source: selectedVideo.source,
+          video_title: selectedVideo.title,
+          video_folder_path: selectedVideo.folder_path,
+          video_direct_url: selectedVideo.direct_url,
+          video_thumbnail_url: selectedVideo.thumbnail_url,
+          start_seconds: parsedStart,
+          end_seconds: parsedEnd,
+          topic: resolvedTopic,
+          comment: annComment.trim(),
+          author: annAuthor.trim() || "Anthony",
+          status: "unused",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setAnnError(data.error || "Failed to save annotation.");
+      } else {
+        if (Array.isArray(data.annotations)) {
+          setAnnotations(data.annotations);
+        } else if (data.annotation) {
+          setAnnotations((prev) => [data.annotation, ...prev]);
+        }
+        setAnnComment("");
+        setAnnEndInput("");
+        setAnnStartInput(formatSecondsToTimestamp(playerCurrentTime));
+      }
+    } catch (err) {
+      setAnnError(err instanceof Error ? err.message : "Network error saving annotation.");
+    } finally {
+      setAnnSaving(false);
+    }
+  };
+
+  // Update annotation status or fields
+  const handleUpdateAnnotation = async (
+    id: string,
+    updates: Partial<{
+      status: AnnotationUsageStatus;
+      comment: string;
+      topic: string;
+      start_seconds: number;
+      end_seconds: number | null;
+      used_for: string | null;
+    }>
+  ) => {
+    // Optimistic update
+    setAnnotations((prev) =>
+      prev.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              ...updates,
+              start_formatted:
+                updates.start_seconds !== undefined
+                  ? formatSecondsToTimestamp(updates.start_seconds)
+                  : a.start_formatted,
+              end_formatted:
+                updates.end_seconds !== undefined
+                  ? updates.end_seconds !== null
+                    ? formatSecondsToTimestamp(updates.end_seconds)
+                    : null
+                  : a.end_formatted,
+              updated_at: new Date().toISOString(),
+            }
+          : a
+      )
+    );
+
+    try {
+      const res = await fetch("/api/video-database/annotations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...updates }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.annotations)) {
+          setAnnotations(data.annotations);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to update annotation:", err);
+    }
+  };
+
+  // Save inline edit of an existing annotation
+  const handleSaveEditedAnnotation = async (id: string) => {
+    const parsedStart = parseTimestampInput(editingStartInput);
+    const parsedEnd = editingEndInput.trim() ? parseTimestampInput(editingEndInput) : null;
+
+    await handleUpdateAnnotation(id, {
+      start_seconds: parsedStart !== null ? parsedStart : 0,
+      end_seconds: parsedEnd,
+      topic: editingTopic.trim() || "General",
+      comment: editingComment.trim(),
+      used_for: editingUsedFor.trim() || null,
+    });
+    setEditingAnnId(null);
+  };
+
+  // Delete an annotation permanently
+  const handleDeleteAnnotation = async (id: string) => {
+    if (!confirm("Delete this timestamp annotation permanently?")) return;
+
+    setAnnotations((prev) => prev.filter((a) => a.id !== id));
+    try {
+      await fetch(`/api/video-database/annotations?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.error("Failed to delete annotation:", err);
+    }
+  };
+
+  // Export Annotated Clips to CSV
+  const handleExportAnnotationsCsv = () => {
+    if (filteredGlobalAnnotations.length === 0) return;
+
+    const headers = [
+      "Status",
+      "Topic / Use-Case",
+      "Start Timestamp",
+      "End Timestamp",
+      "Comment / Instruction",
+      "Used In / Published Where",
+      "Author",
+      "Video Title",
+      "Platform",
+      "Folder Path",
+      "Direct URL",
+      "Created At",
+    ];
+
+    const escapeCsv = (val: string | number | null | undefined) => {
+      const str = String(val ?? "");
+      if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = filteredGlobalAnnotations.map((a) => [
+      getStatusBadgeStyle(a.status).label,
+      a.topic,
+      a.start_formatted,
+      a.end_formatted || "",
+      a.comment,
+      a.used_for || "",
+      a.author,
+      a.video_title,
+      a.video_source,
+      a.video_folder_path || "",
+      a.video_direct_url,
+      new Date(a.created_at).toLocaleDateString(),
+    ]);
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.map(escapeCsv).join(","), ...rows.map((r) => r.map(escapeCsv).join(","))].join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `recal-annotated-clips-${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Handle URL auth params
   useEffect(() => {
@@ -272,19 +703,29 @@ export default function VideoDatabasePage() {
     });
   };
 
-  // Update Drawer Note when selected video changes
+  // Update Drawer Note & Annotation Form when selected video changes
   useEffect(() => {
     if (selectedVideo) {
       setDrawerNote(notesMap[selectedVideo.source_id] || "");
+      // Also pre-load existing database transcript into drawer if present
+      setVidiqTranscript(selectedVideo.transcript || null);
+    } else {
+      setVidiqTranscript(null);
     }
     setVidiqTitleScore(null);
     setVidiqSuggestedTitles([]);
-    setVidiqTranscript(null);
     setTranscriptSearch("");
     setVidiqToolError(null);
+    setPlayerCurrentTime(0);
+    setYoutubeStartSeconds(0);
+    setAnnStartInput("00:00");
+    setAnnEndInput("");
+    setAnnComment("");
+    setAnnError(null);
+    setEditingAnnId(null);
   }, [selectedVideo, notesMap]);
 
-  // Filter videos locally by Orientation & Category & Starred
+  // Filter videos locally by Orientation, Category, Starred & Annotated
   const displayedVideos = useMemo(() => {
     return videos.filter((video) => {
       const classification = classifyVideo(video.title, video.folder_path || "", video.duration_seconds);
@@ -298,9 +739,12 @@ export default function VideoDatabasePage() {
       if (starredOnly && !starredMap[video.source_id]) {
         return false;
       }
+      if (annotatedOnlyFilter && (!annotationsByVideo[video.source_id] || annotationsByVideo[video.source_id].length === 0)) {
+        return false;
+      }
       return true;
     });
-  }, [videos, orientationFilter, categoryFilter, starredOnly, starredMap]);
+  }, [videos, orientationFilter, categoryFilter, starredOnly, starredMap, annotatedOnlyFilter, annotationsByVideo]);
 
   // Trigger Live Full Sync
   const handleTriggerSync = async () => {
@@ -919,8 +1363,8 @@ export default function VideoDatabasePage() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {/* Main Section Navigation: Video Library vs YouTube Ideation */}
-        <div className="flex items-center gap-2 border-b border-[#1E293B] pb-3">
+        {/* Main Section Navigation: Video Library vs Annotated Clips Queue vs YouTube Ideation */}
+        <div className="flex items-center gap-2 border-b border-[#1E293B] pb-3 flex-wrap">
           <button
             onClick={() => setActiveMainTab("catalog")}
             className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 cursor-pointer ${
@@ -932,6 +1376,24 @@ export default function VideoDatabasePage() {
             <span>📹</span>
             <span>Video Asset Library ({stats?.total ? stats.total.toLocaleString() : "..."})</span>
           </button>
+
+          <button
+            onClick={() => setActiveMainTab("annotations")}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 cursor-pointer ${
+              activeMainTab === "annotations"
+                ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/20"
+                : "bg-[#131B2E] text-[#94A3B8] hover:text-white border border-[#1E293B]"
+            }`}
+          >
+            <span>✂️</span>
+            <span>Annotated Clips Queue ({annotationStats.total})</span>
+            {annotationStats.unused > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 font-mono">
+                {annotationStats.unused} ready
+              </span>
+            )}
+          </button>
+
           <button
             onClick={() => {
               setActiveMainTab("research");
@@ -1109,11 +1571,11 @@ export default function VideoDatabasePage() {
                   </div>
                 </div>
 
-            {/* Source Tab Toggle & Starred Filter */}
-            <div className="flex items-center gap-2">
+            {/* Source Tab Toggle & Starred / Annotated Filter */}
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setStarredOnly(!starredOnly)}
-                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition ${
+                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
                   starredOnly
                     ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
                     : "bg-[#0B0F17] text-[#94A3B8] border-[#1E293B] hover:text-white"
@@ -1122,6 +1584,19 @@ export default function VideoDatabasePage() {
               >
                 <span>⭐</span>
                 <span>Favorites</span>
+              </button>
+
+              <button
+                onClick={() => setAnnotatedOnlyFilter(!annotatedOnlyFilter)}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                  annotatedOnlyFilter
+                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                    : "bg-[#0B0F17] text-[#94A3B8] border-[#1E293B] hover:text-white"
+                }`}
+                title="Show only videos on the current page that have timestamp annotations"
+              >
+                <span>✂️</span>
+                <span>Annotated ({annotationStats.uniqueVideos})</span>
               </button>
 
               <div className="flex items-center bg-[#0B0F17] border border-[#1E293B] rounded-lg p-1 text-xs font-medium">
@@ -1378,6 +1853,8 @@ export default function VideoDatabasePage() {
                     const cls = classifyVideo(video.title, video.folder_path || "", video.duration_seconds);
                     const isStarred = Boolean(starredMap[video.source_id]);
                     const hasNote = Boolean(notesMap[video.source_id]);
+                    const videoClips = annotationsByVideo[video.source_id] || [];
+                    const unusedClipsCount = videoClips.filter((c) => c.status === "unused").length;
 
                     return (
                       <tr
@@ -1419,10 +1896,22 @@ export default function VideoDatabasePage() {
                               )}
                             </div>
                             <div className="min-w-0">
-                              <span className="font-semibold text-white group-hover:text-blue-400 transition truncate block flex items-center gap-1.5">
-                                {video.title}
+                              <span className="font-semibold text-white group-hover:text-blue-400 transition truncate block flex items-center gap-1.5 flex-wrap">
+                                <span className="truncate">{video.title}</span>
+                                {videoClips.length > 0 && (
+                                  <span
+                                    className={`text-[9px] px-1.5 py-0.5 rounded border font-semibold shrink-0 ${
+                                      unusedClipsCount > 0
+                                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                        : "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                                    }`}
+                                    title={`${videoClips.length} annotated clip(s) (${unusedClipsCount} unused/ready)`}
+                                  >
+                                    ✂️ {videoClips.length} {videoClips.length === 1 ? "clip" : "clips"}
+                                  </span>
+                                )}
                                 {hasNote && (
-                                  <span className="text-[9px] px-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 font-normal">
+                                  <span className="text-[9px] px-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 font-normal shrink-0">
                                     📝 Note
                                   </span>
                                 )}
@@ -1578,6 +2067,8 @@ export default function VideoDatabasePage() {
               {displayedVideos.map((video) => {
                 const cls = classifyVideo(video.title, video.folder_path || "", video.duration_seconds);
                 const isStarred = Boolean(starredMap[video.source_id]);
+                const videoClips = annotationsByVideo[video.source_id] || [];
+                const unusedClipsCount = videoClips.filter((c) => c.status === "unused").length;
 
                 return (
                   <div
@@ -1606,6 +2097,19 @@ export default function VideoDatabasePage() {
                       <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/80 font-mono text-[10px] text-white font-medium">
                         {video.duration_formatted || `${video.duration_seconds}s`}
                       </div>
+
+                      {/* Annotated Clips Badge on Thumbnail */}
+                      {videoClips.length > 0 && (
+                        <div
+                          className={`absolute bottom-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold border shadow ${
+                            unusedClipsCount > 0
+                              ? "bg-emerald-950/90 text-emerald-300 border-emerald-500/50"
+                              : "bg-blue-950/90 text-blue-300 border-blue-500/50"
+                          }`}
+                        >
+                          ✂️ {videoClips.length} {videoClips.length === 1 ? "clip" : "clips"}
+                        </div>
+                      )}
 
                       {/* Platform & Orientation Badges */}
                       <div className="absolute top-2 left-2 flex items-center gap-1">
@@ -1676,6 +2180,328 @@ export default function VideoDatabasePage() {
         )}
       </>
     )}
+
+        {/* Annotated Clips & Repurposing Queue Tab */}
+        {activeMainTab === "annotations" && (
+          <div className="space-y-6">
+            {/* Header & KPI Overview */}
+            <div className="p-6 bg-gradient-to-r from-emerald-950/40 via-[#131B2E] to-blue-950/40 border border-emerald-500/20 rounded-2xl space-y-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">✂️</span>
+                    <h2 className="text-lg font-bold text-white">Timestamped Clip Annotations &amp; Repurposing Tracker</h2>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold uppercase tracking-wider">
+                      Shared Team Queue
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#94A3B8] mt-1 max-w-3xl leading-relaxed">
+                    All timestamped footage segments and notes saved by Anthony and the team across Google Drive &amp; YouTube. Click any clip&apos;s timestamp to launch the video player directly at that exact moment, or update its usage status as clips get edited and published.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={fetchAnnotations}
+                    disabled={annotationsLoading}
+                    className="px-3 py-2 rounded-xl bg-[#0B0F17] hover:bg-[#1E293B] border border-[#1E293B] text-xs font-medium text-slate-300 transition cursor-pointer"
+                  >
+                    {annotationsLoading ? "Refreshing..." : "↻ Refresh Queue"}
+                  </button>
+                  <button
+                    onClick={handleExportAnnotationsCsv}
+                    disabled={filteredGlobalAnnotations.length === 0}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-xs font-semibold text-white shadow-md shadow-emerald-500/20 transition cursor-pointer"
+                  >
+                    ⬇ Export Clips CSV ({filteredGlobalAnnotations.length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Interactive KPI Status Filter Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div
+                  onClick={() => setAnnStatusFilter("all")}
+                  className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                    annStatusFilter === "all"
+                      ? "bg-[#0B0F17] border-white/40 ring-1 ring-white/30"
+                      : "bg-[#0B0F17]/70 border-[#1E293B] hover:border-slate-600"
+                  }`}
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] block">Total Annotated Clips</span>
+                  <span className="text-2xl font-bold text-white mt-1 block">{annotationStats.total}</span>
+                  <span className="text-[11px] text-[#64748B] block">Across {annotationStats.uniqueVideos} videos</span>
+                </div>
+
+                <div
+                  onClick={() => setAnnStatusFilter(annStatusFilter === "unused" ? "all" : "unused")}
+                  className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                    annStatusFilter === "unused"
+                      ? "bg-emerald-950/60 border-emerald-400 ring-1 ring-emerald-400"
+                      : "bg-[#0B0F17]/70 border-[#1E293B] hover:border-emerald-500/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 block">Unused / Ready</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  </div>
+                  <span className="text-2xl font-bold text-emerald-400 mt-1 block">{annotationStats.unused}</span>
+                  <span className="text-[11px] text-emerald-300/70 block">
+                    {annStatusFilter === "unused" ? "✓ Filter Active" : "Ready to cut/use"}
+                  </span>
+                </div>
+
+                <div
+                  onClick={() => setAnnStatusFilter(annStatusFilter === "in_progress" ? "all" : "in_progress")}
+                  className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                    annStatusFilter === "in_progress"
+                      ? "bg-amber-950/60 border-amber-400 ring-1 ring-amber-400"
+                      : "bg-[#0B0F17]/70 border-[#1E293B] hover:border-amber-500/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 block">In Editing</span>
+                    <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                  </div>
+                  <span className="text-2xl font-bold text-amber-400 mt-1 block">{annotationStats.inProgress}</span>
+                  <span className="text-[11px] text-amber-300/70 block">
+                    {annStatusFilter === "in_progress" ? "✓ Filter Active" : "Being edited now"}
+                  </span>
+                </div>
+
+                <div
+                  onClick={() => setAnnStatusFilter(annStatusFilter === "used" ? "all" : "used")}
+                  className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                    annStatusFilter === "used"
+                      ? "bg-blue-950/60 border-blue-400 ring-1 ring-blue-400"
+                      : "bg-[#0B0F17]/70 border-[#1E293B] hover:border-blue-500/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300 block">Used / Published</span>
+                    <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                  </div>
+                  <span className="text-2xl font-bold text-blue-400 mt-1 block">{annotationStats.used}</span>
+                  <span className="text-[11px] text-blue-300/70 block">
+                    {annStatusFilter === "used" ? "✓ Filter Active" : "Completed & deployed"}
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl border bg-[#0B0F17]/70 border-[#1E293B]">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] block">Annotated Videos</span>
+                  <span className="text-2xl font-bold text-indigo-400 mt-1 block">{annotationStats.uniqueVideos}</span>
+                  <span className="text-[11px] text-[#64748B] block">Source videos with clips</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter & Search Toolbar for Annotations */}
+            <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={annSearchQuery}
+                  onChange={(e) => setAnnSearchQuery(e.target.value)}
+                  placeholder="Search clip comments, topics (e.g. 'Kilimanjaro', 'CO2'), video titles, or where used..."
+                  className="w-full pl-3.5 pr-9 py-2 bg-[#0B0F17] border border-[#1E293B] rounded-lg text-xs text-white placeholder-[#64748B] focus:outline-none focus:border-emerald-500"
+                />
+                {annSearchQuery && (
+                  <button
+                    onClick={() => setAnnSearchQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#64748B] hover:text-white"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                <select
+                  value={annStatusFilter}
+                  onChange={(e) => setAnnStatusFilter(e.target.value as "all" | AnnotationUsageStatus)}
+                  className="bg-[#0B0F17] border border-[#1E293B] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="all">All Usage Statuses</option>
+                  <option value="unused">🟢 Unused / Ready</option>
+                  <option value="in_progress">🟡 In Editing</option>
+                  <option value="used">🔵 Used / Published</option>
+                </select>
+
+                <select
+                  value={annTopicFilter}
+                  onChange={(e) => setAnnTopicFilter(e.target.value)}
+                  className="bg-[#0B0F17] border border-[#1E293B] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="all">All Topics / Pillars</option>
+                  {allAvailableTopics.map((t) => (
+                    <option key={t} value={t}>
+                      🏷️ {t}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={annSourceFilter}
+                  onChange={(e) => setAnnSourceFilter(e.target.value as "all" | "youtube" | "gdrive")}
+                  className="bg-[#0B0F17] border border-[#1E293B] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="all">All Platforms</option>
+                  <option value="gdrive">📁 Google Drive</option>
+                  <option value="youtube">▶ YouTube</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Annotations Table / Cards */}
+            {filteredGlobalAnnotations.length === 0 ? (
+              <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl p-12 text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 mx-auto flex items-center justify-center text-xl">
+                  ✂️
+                </div>
+                <h3 className="text-base font-semibold text-white">
+                  {annotations.length === 0 ? "No timestamped clip annotations yet" : "No clips match your current filters"}
+                </h3>
+                <p className="text-xs text-[#94A3B8] max-w-md mx-auto">
+                  {annotations.length === 0
+                    ? "Click any video in the Video Asset Library to open the player, capture a timestamp, and leave a note like 'Use this portion for X topic'."
+                    : "Try clearing the search or switching the status/topic filters above."}
+                </p>
+                {annotations.length === 0 && (
+                  <button
+                    onClick={() => setActiveMainTab("catalog")}
+                    className="mt-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white transition cursor-pointer"
+                  >
+                    Browse Video Library to Add Annotations →
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="bg-[#131B2E] border border-[#1E293B] rounded-xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#0E1526] text-[#94A3B8] uppercase text-[10px] tracking-wider border-b border-[#1E293B]">
+                      <tr>
+                        <th className="py-3 px-4">Clip Timestamp</th>
+                        <th className="py-3 px-4">Topic &amp; Annotation Comment</th>
+                        <th className="py-3 px-4">Source Video Asset</th>
+                        <th className="py-3 px-4">Usage Status &amp; Where Used</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#1E293B]/70">
+                      {filteredGlobalAnnotations.map((ann) => {
+                        const badge = getStatusBadgeStyle(ann.status);
+                        return (
+                          <tr key={ann.id} className="hover:bg-[#1E293B]/40 transition align-top">
+                            {/* Timestamp Play Button */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <button
+                                onClick={() => handleOpenAnnotationClip(ann)}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-mono text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                                title="Open video player and jump directly to this timestamp"
+                              >
+                                <span>▶</span>
+                                <span>
+                                  {ann.start_formatted}
+                                  {ann.end_formatted ? ` – ${ann.end_formatted}` : ""}
+                                </span>
+                              </button>
+                              <span className="text-[10px] text-[#64748B] block mt-1">
+                                By {ann.author || "Anthony"} • {new Date(ann.created_at).toLocaleDateString()}
+                              </span>
+                            </td>
+
+                            {/* Topic & Comment */}
+                            <td className="py-3.5 px-4 max-w-md space-y-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold">
+                                  🏷️ {ann.topic}
+                                </span>
+                              </div>
+                              <p className="text-white text-xs leading-relaxed whitespace-pre-wrap font-medium">
+                                {ann.comment}
+                              </p>
+                            </td>
+
+                            {/* Source Video */}
+                            <td className="py-3.5 px-4 max-w-xs">
+                              <button
+                                onClick={() => handleOpenAnnotationClip(ann)}
+                                className="text-left group cursor-pointer"
+                              >
+                                <span className="text-white font-semibold group-hover:text-blue-400 transition line-clamp-1 block">
+                                  {ann.video_title}
+                                </span>
+                                <span className="text-[11px] text-[#64748B] line-clamp-1 block mt-0.5">
+                                  {ann.video_source === "youtube" ? "▶ YouTube" : "📁 Drive"} • {ann.video_folder_path || "Recal Media"}
+                                </span>
+                              </button>
+                            </td>
+
+                            {/* Usage Status & Used For */}
+                            <td className="py-3.5 px-4 min-w-[220px] space-y-2">
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={ann.status}
+                                  onChange={(e) =>
+                                    handleUpdateAnnotation(ann.id, {
+                                      status: e.target.value as AnnotationUsageStatus,
+                                    })
+                                  }
+                                  className={`px-2.5 py-1 rounded-lg border text-xs font-semibold focus:outline-none cursor-pointer ${badge.classes} bg-[#0B0F17]`}
+                                >
+                                  <option value="unused">🟢 Unused / Ready</option>
+                                  <option value="in_progress">🟡 In Editing</option>
+                                  <option value="used">🔵 Used / Published</option>
+                                </select>
+                              </div>
+                              <input
+                                type="text"
+                                defaultValue={ann.used_for || ""}
+                                onBlur={(e) => {
+                                  const nextVal = e.target.value.trim() || null;
+                                  if (nextVal !== (ann.used_for || null)) {
+                                    handleUpdateAnnotation(ann.id, { used_for: nextVal });
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                placeholder="Where used? (e.g. 'IG Reel Oct 20', 'Kili Ad')..."
+                                className="w-full px-2.5 py-1 bg-[#0B0F17] border border-[#1E293B] rounded text-[11px] text-slate-200 placeholder-[#64748B] focus:outline-none focus:border-blue-500"
+                              />
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => handleOpenAnnotationClip(ann)}
+                                  className="px-2.5 py-1 rounded bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[11px] font-medium transition cursor-pointer"
+                                >
+                                  Inspect Video
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteAnnotation(ann.id)}
+                                  className="p-1.5 rounded hover:bg-rose-950/50 text-[#64748B] hover:text-rose-400 transition cursor-pointer"
+                                  title="Delete annotation"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* VidIQ YouTube Research & Ideation Hub */}
         {activeMainTab === "research" && (
@@ -2027,33 +2853,163 @@ export default function VideoDatabasePage() {
 
             {/* Drawer Body */}
             <div className="p-6 space-y-6">
-              {/* In-App Streamable Video Player */}
-              <div className="w-full rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center relative border border-[#1E293B] shadow-lg">
-                {selectedVideo.source === "youtube" ? (
-                  <iframe
-                    src={`https://www.youtube-nocookie.com/embed/${selectedVideo.source_id}?autoplay=1`}
-                    title={selectedVideo.title}
-                    className="w-full h-full border-0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                ) : (
-                  <iframe
-                    src={`https://drive.google.com/file/d/${selectedVideo.source_id}/preview`}
-                    title={selectedVideo.title}
-                    className="w-full h-full border-0"
-                    allow="autoplay"
-                    allowFullScreen
-                  />
+              {/* In-App Streamable Video Player + Live Playhead Bar */}
+              <div className="space-y-2.5">
+                {selectedVideo.source === "gdrive" && (
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-[#94A3B8] flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      <span>
+                        {drivePlayerMode === "native"
+                          ? "Direct Stream Player (Live timestamp sync enabled)"
+                          : "Google Drive IFrame Embed"}
+                      </span>
+                    </span>
+                    <div className="flex items-center bg-[#0B0F17] border border-[#1E293B] rounded-lg p-0.5">
+                      <button
+                        onClick={() => setDrivePlayerMode("native")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
+                          drivePlayerMode === "native"
+                            ? "bg-emerald-600 text-white"
+                            : "text-[#94A3B8] hover:text-white"
+                        }`}
+                      >
+                        ⚡ Native Stream
+                      </button>
+                      <button
+                        onClick={() => setDrivePlayerMode("embed")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
+                          drivePlayerMode === "embed"
+                            ? "bg-amber-600 text-white"
+                            : "text-[#94A3B8] hover:text-white"
+                        }`}
+                      >
+                        📁 Drive Embed
+                      </button>
+                    </div>
+                  </div>
                 )}
+
+                <div className="w-full rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center relative border border-[#1E293B] shadow-lg">
+                  {selectedVideo.source === "youtube" ? (
+                    <iframe
+                      ref={youtubeIframeRef}
+                      src={`https://www.youtube.com/embed/${selectedVideo.source_id}?autoplay=1&enablejsapi=1&rel=0${
+                        youtubeStartSeconds > 0 ? `&start=${youtubeStartSeconds}` : ""
+                      }`}
+                      title={selectedVideo.title}
+                      className="w-full h-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  ) : drivePlayerMode === "native" ? (
+                    <video
+                      ref={driveVideoRef}
+                      key={selectedVideo.source_id}
+                      src={`/api/video-database/stream?fileId=${encodeURIComponent(selectedVideo.source_id)}`}
+                      poster={selectedVideo.thumbnail_url || undefined}
+                      controls
+                      autoPlay
+                      playsInline
+                      onTimeUpdate={(e) => {
+                        setPlayerCurrentTime(Math.floor(e.currentTarget.currentTime));
+                      }}
+                      onError={() => {
+                        // Automatically fallback to Google Drive embed if codec/stream unsupported
+                        setDrivePlayerMode("embed");
+                      }}
+                      className="w-full h-full object-contain bg-black"
+                    />
+                  ) : (
+                    <iframe
+                      src={`https://drive.google.com/file/d/${selectedVideo.source_id}/preview`}
+                      title={selectedVideo.title}
+                      className="w-full h-full border-0"
+                      allow="autoplay"
+                      allowFullScreen
+                    />
+                  )}
+                </div>
+
+                {/* Live Playhead Capture Bar & Visual Clip Markers */}
+                <div className="p-2.5 rounded-xl bg-[#131B2E] border border-[#1E293B] space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="px-2 py-0.5 rounded bg-[#0B0F17] border border-[#1E293B] font-mono text-emerald-400 font-bold">
+                        ⏱ {formatSecondsToTimestamp(playerCurrentTime)}
+                      </span>
+                      <span className="text-[11px] text-[#94A3B8]">
+                        {selectedVideo.duration_seconds > 0
+                          ? `/ ${formatSecondsToTimestamp(selectedVideo.duration_seconds)}`
+                          : "Playhead"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setAnnStartInput(formatSecondsToTimestamp(playerCurrentTime))}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold transition cursor-pointer"
+                        title="Capture current player time as Clip Start"
+                      >
+                        📍 Capture Start ({formatSecondsToTimestamp(playerCurrentTime)})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAnnEndInput(formatSecondsToTimestamp(playerCurrentTime))}
+                        className="px-2.5 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[11px] font-semibold transition cursor-pointer"
+                        title="Capture current player time as Clip End"
+                      >
+                        🏁 Capture End
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Visual Annotated Clip Timeline Markers */}
+                  {selectedVideoAnnotations.length > 0 && selectedVideo.duration_seconds > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <div className="flex items-center justify-between text-[10px] text-[#64748B]">
+                        <span>Annotated Segments on Timeline ({selectedVideoAnnotations.length})</span>
+                        <span>Click any marker to jump</span>
+                      </div>
+                      <div className="relative h-2.5 w-full rounded-full bg-[#0B0F17] border border-[#1E293B] overflow-hidden">
+                        {selectedVideoAnnotations.map((ann) => {
+                          const totalDur = Math.max(1, selectedVideo.duration_seconds);
+                          const leftPct = Math.min(98, Math.max(0, (ann.start_seconds / totalDur) * 100));
+                          const clipEnd = ann.end_seconds
+                            ? Math.max(ann.start_seconds + 3, ann.end_seconds)
+                            : ann.start_seconds + Math.max(10, totalDur * 0.03);
+                          const widthPct = Math.min(100 - leftPct, Math.max(2, ((clipEnd - ann.start_seconds) / totalDur) * 100));
+                          const barColor =
+                            ann.status === "used"
+                              ? "bg-blue-400 hover:bg-blue-300"
+                              : ann.status === "in_progress"
+                              ? "bg-amber-400 hover:bg-amber-300"
+                              : "bg-emerald-400 hover:bg-emerald-300";
+
+                          return (
+                            <button
+                              key={ann.id}
+                              type="button"
+                              onClick={() => seekPlayerTo(ann.start_seconds)}
+                              style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                              className={`absolute top-0 bottom-0 ${barColor} opacity-85 hover:opacity-100 transition cursor-pointer rounded-sm`}
+                              title={`${ann.start_formatted}${ann.end_formatted ? ` – ${ann.end_formatted}` : ""} [${ann.topic}]: ${ann.comment}`}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Google Drive Stream Notice & Direct Link */}
-              {selectedVideo.source === "gdrive" && (
+              {/* Google Drive Stream Notice & Direct Link (only when in embed mode) */}
+              {selectedVideo.source === "gdrive" && drivePlayerMode === "embed" && (
                 <div className="p-3 rounded-lg bg-[#0B132B]/80 border border-indigo-900/40 text-xs flex items-center justify-between gap-3">
                   <div className="text-[#94A3B8] leading-relaxed">
-                    <span className="text-amber-400 font-semibold mr-1">Google Drive:</span>
-                    If the player prompts to <em>Sign in</em>, your browser blocks 3rd-party cookies in embeds. Click <em>Sign in</em> once to play in the popup or open directly in Drive.
+                    <span className="text-amber-400 font-semibold mr-1">Google Drive Embed:</span>
+                    Switch to <strong>⚡ Native Stream</strong> above for 1-click timestamp capture and no cookie popups.
                   </div>
                   <a
                     href={selectedVideo.direct_url || `https://drive.google.com/file/d/${selectedVideo.source_id}/view`}
@@ -2061,9 +3017,6 @@ export default function VideoDatabasePage() {
                     rel="noopener noreferrer"
                     className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 font-medium border border-emerald-500/20 flex items-center gap-1.5 transition-colors"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
                     Open in Drive
                   </a>
                 </div>
@@ -2082,6 +3035,11 @@ export default function VideoDatabasePage() {
                   }`}>
                     {classifyVideo(selectedVideo.title, selectedVideo.folder_path || "", selectedVideo.duration_seconds).categoryLabel}
                   </span>
+                  {selectedVideoAnnotations.length > 0 && (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                      ✂️ {selectedVideoAnnotations.length} Annotated {selectedVideoAnnotations.length === 1 ? "Clip" : "Clips"}
+                    </span>
+                  )}
                 </div>
 
                 <h3 className="text-lg font-bold text-white">{selectedVideo.title}</h3>
@@ -2118,13 +3076,363 @@ export default function VideoDatabasePage() {
                 </button>
               </div>
 
-              {/* Content Creation & Repurposing Notes */}
+              {/* ==================================================================== */}
+              {/* TIMESTAMPED CLIP ANNOTATOR & REPURPOSING TRACKER (Supabase Cloud)    */}
+              {/* ==================================================================== */}
+              <div className="p-4 bg-[#131B2E] rounded-xl border border-emerald-500/30 space-y-4 shadow-md">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs uppercase font-bold text-emerald-400 tracking-wider flex items-center gap-1.5">
+                      <span>✂️</span>
+                      <span>Timestamp Clip Annotator &amp; Usage Tracker</span>
+                    </span>
+                    <p className="text-[11px] text-[#94A3B8] mt-0.5">
+                      Tag specific sections of this footage with timestamps, topics, and instructions. Saved permanently for the whole team.
+                    </p>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    {selectedVideoAnnotations.length} saved
+                  </span>
+                </div>
+
+                {/* Add New Clip Annotation Form */}
+                <form onSubmit={handleAddAnnotation} className="p-3.5 bg-[#0B0F17] rounded-xl border border-[#1E293B] space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {/* Start Timestamp */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] uppercase font-bold text-[#94A3B8]">Start Time (MM:SS) *</label>
+                        <button
+                          type="button"
+                          onClick={() => setAnnStartInput(formatSecondsToTimestamp(playerCurrentTime))}
+                          className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer"
+                        >
+                          📍 Use {formatSecondsToTimestamp(playerCurrentTime)}
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={annStartInput}
+                        onChange={(e) => setAnnStartInput(e.target.value)}
+                        placeholder="00:00"
+                        className="w-full px-2.5 py-1.5 bg-[#131B2E] border border-[#1E293B] rounded-lg text-xs font-mono text-white placeholder-[#64748B] focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    {/* End Timestamp (Optional) + Quick Offset Buttons */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] uppercase font-bold text-[#94A3B8]">End Time (Optional)</label>
+                        <div className="flex items-center gap-1">
+                          {[15, 30, 60].map((secOffset) => (
+                            <button
+                              key={secOffset}
+                              type="button"
+                              onClick={() => {
+                                const base = parseTimestampInput(annStartInput) ?? playerCurrentTime;
+                                setAnnEndInput(formatSecondsToTimestamp(base + secOffset));
+                              }}
+                              className="px-1.5 py-0.2 rounded bg-[#1E293B] hover:bg-[#334155] text-[9px] font-mono text-slate-300 cursor-pointer"
+                            >
+                              +{secOffset}s
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setAnnEndInput(formatSecondsToTimestamp(playerCurrentTime))}
+                            className="text-[10px] text-blue-400 hover:text-blue-300 font-semibold ml-1 cursor-pointer"
+                          >
+                            🏁 Now
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        value={annEndInput}
+                        onChange={(e) => setAnnEndInput(e.target.value)}
+                        placeholder="e.g. 02:45"
+                        className="w-full px-2.5 py-1.5 bg-[#131B2E] border border-[#1E293B] rounded-lg text-xs font-mono text-white placeholder-[#64748B] focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Topic / Pillar & Author */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="sm:col-span-2">
+                      <label className="text-[10px] uppercase font-bold text-[#94A3B8] mb-1 block">
+                        Topic / Content Use-Case
+                      </label>
+                      <select
+                        value={annTopic}
+                        onChange={(e) => setAnnTopic(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-[#131B2E] border border-[#1E293B] rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500"
+                      >
+                        {allAvailableTopics.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                        <option value="__custom__">+ Custom Topic...</option>
+                      </select>
+                      {annTopic === "__custom__" && (
+                        <input
+                          type="text"
+                          value={annCustomTopic}
+                          onChange={(e) => setAnnCustomTopic(e.target.value)}
+                          placeholder="Enter custom topic (e.g. 'Aconcagua Webinar Hook')..."
+                          className="mt-1.5 w-full px-2.5 py-1.5 bg-[#131B2E] border border-emerald-500/40 rounded-lg text-xs text-white placeholder-[#64748B] focus:outline-none"
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-[#94A3B8] mb-1 block">Annotated By</label>
+                      <input
+                        type="text"
+                        value={annAuthor}
+                        onChange={(e) => setAnnAuthor(e.target.value)}
+                        placeholder="Anthony"
+                        className="w-full px-2.5 py-1.5 bg-[#131B2E] border border-[#1E293B] rounded-lg text-xs text-white placeholder-[#64748B] focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Comment / Repurposing Instruction */}
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-[#94A3B8] mb-1 block">
+                      Comment / Instruction *
+                    </label>
+                    <textarea
+                      value={annComment}
+                      onChange={(e) => setAnnComment(e.target.value)}
+                      placeholder="e.g. 'Use this portion for Kilimanjaro acclimatization reel — Anthony explains how nasal breathing prevents altitude headaches.'"
+                      rows={2}
+                      className="w-full p-2.5 bg-[#131B2E] border border-[#1E293B] rounded-lg text-xs text-white placeholder-[#64748B] focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  {annError && (
+                    <p className="text-[11px] text-rose-400 bg-rose-950/40 border border-rose-800/40 rounded-lg px-2.5 py-1.5">
+                      {annError}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[10px] text-[#64748B]">
+                      Persists globally until deleted
+                    </span>
+                    <button
+                      type="submit"
+                      disabled={annSaving}
+                      className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-semibold text-white shadow-md shadow-emerald-500/20 transition cursor-pointer"
+                    >
+                      {annSaving ? "Saving Clip..." : "➕ Add Timestamp Annotation"}
+                    </button>
+                  </div>
+                </form>
+
+                {/* List of Saved Annotations for This Video */}
+                {selectedVideoAnnotations.length > 0 ? (
+                  <div className="space-y-2.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-[#94A3B8] tracking-wider">
+                        Saved Clips on This Video ({selectedVideoAnnotations.length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedVideo(null);
+                          setActiveMainTab("annotations");
+                        }}
+                        className="text-[10px] text-emerald-400 hover:text-emerald-300 font-medium cursor-pointer"
+                      >
+                        View All {annotationStats.total} Clips in Global Queue →
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                      {selectedVideoAnnotations.map((ann) => {
+                        const badge = getStatusBadgeStyle(ann.status);
+                        const isEditing = editingAnnId === ann.id;
+
+                        return (
+                          <div
+                            key={ann.id}
+                            className="p-3 rounded-xl bg-[#0B0F17] border border-[#1E293B] hover:border-[#334155] transition space-y-2"
+                          >
+                            {isEditing ? (
+                              <div className="space-y-2 text-xs">
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div>
+                                    <label className="text-[9px] uppercase text-[#64748B] block">Start</label>
+                                    <input
+                                      type="text"
+                                      value={editingStartInput}
+                                      onChange={(e) => setEditingStartInput(e.target.value)}
+                                      className="w-full px-2 py-1 bg-[#131B2E] border border-[#1E293B] rounded font-mono text-white"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] uppercase text-[#64748B] block">End</label>
+                                    <input
+                                      type="text"
+                                      value={editingEndInput}
+                                      onChange={(e) => setEditingEndInput(e.target.value)}
+                                      placeholder="Optional"
+                                      className="w-full px-2 py-1 bg-[#131B2E] border border-[#1E293B] rounded font-mono text-white"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] uppercase text-[#64748B] block">Topic</label>
+                                    <input
+                                      type="text"
+                                      value={editingTopic}
+                                      onChange={(e) => setEditingTopic(e.target.value)}
+                                      className="w-full px-2 py-1 bg-[#131B2E] border border-[#1E293B] rounded text-white"
+                                    />
+                                  </div>
+                                </div>
+                                <textarea
+                                  value={editingComment}
+                                  onChange={(e) => setEditingComment(e.target.value)}
+                                  rows={2}
+                                  className="w-full p-2 bg-[#131B2E] border border-[#1E293B] rounded text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={editingUsedFor}
+                                  onChange={(e) => setEditingUsedFor(e.target.value)}
+                                  placeholder="Where was this clip used? (optional)"
+                                  className="w-full px-2 py-1 bg-[#131B2E] border border-[#1E293B] rounded text-white"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingAnnId(null)}
+                                    className="px-2.5 py-1 rounded text-[#94A3B8] hover:text-white"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveEditedAnnotation(ann.id)}
+                                    className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <button
+                                      type="button"
+                                      onClick={() => seekPlayerTo(ann.start_seconds)}
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-mono text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                                      title="Click to jump video player to this timestamp"
+                                    >
+                                      <span>▶</span>
+                                      <span>
+                                        {ann.start_formatted}
+                                        {ann.end_formatted ? ` – ${ann.end_formatted}` : ""}
+                                      </span>
+                                    </button>
+
+                                    <span className="px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold">
+                                      🏷️ {ann.topic}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5">
+                                    <select
+                                      value={ann.status}
+                                      onChange={(e) =>
+                                        handleUpdateAnnotation(ann.id, {
+                                          status: e.target.value as AnnotationUsageStatus,
+                                        })
+                                      }
+                                      className={`px-2 py-0.5 rounded border text-[10px] font-semibold focus:outline-none cursor-pointer ${badge.classes} bg-[#131B2E]`}
+                                    >
+                                      <option value="unused">🟢 Unused / Ready</option>
+                                      <option value="in_progress">🟡 In Editing</option>
+                                      <option value="used">🔵 Used / Published</option>
+                                    </select>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingAnnId(ann.id);
+                                        setEditingStartInput(ann.start_formatted);
+                                        setEditingEndInput(ann.end_formatted || "");
+                                        setEditingTopic(ann.topic);
+                                        setEditingComment(ann.comment);
+                                        setEditingUsedFor(ann.used_for || "");
+                                      }}
+                                      className="p-1 rounded hover:bg-[#1E293B] text-[#64748B] hover:text-white text-xs cursor-pointer"
+                                      title="Edit annotation"
+                                    >
+                                      ✏️
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteAnnotation(ann.id)}
+                                      className="p-1 rounded hover:bg-rose-950/50 text-[#64748B] hover:text-rose-400 text-xs cursor-pointer"
+                                      title="Delete annotation"
+                                    >
+                                      🗑️
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <p className="text-xs text-white leading-relaxed whitespace-pre-wrap">
+                                  {ann.comment}
+                                </p>
+
+                                <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#1E293B]/60 text-[10px] text-[#64748B]">
+                                  <span>
+                                    Added by <strong className="text-slate-300">{ann.author || "Anthony"}</strong> •{" "}
+                                    {new Date(ann.created_at).toLocaleDateString()}
+                                  </span>
+                                  <input
+                                    type="text"
+                                    defaultValue={ann.used_for || ""}
+                                    onBlur={(e) => {
+                                      const nextVal = e.target.value.trim() || null;
+                                      if (nextVal !== (ann.used_for || null)) {
+                                        handleUpdateAnnotation(ann.id, { used_for: nextVal });
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        (e.target as HTMLInputElement).blur();
+                                      }
+                                    }}
+                                    placeholder="+ Note where used (e.g. 'IG Reel')"
+                                    className="w-44 px-2 py-0.5 bg-[#131B2E] border border-[#1E293B] rounded text-[10px] text-slate-200 placeholder-[#64748B] focus:outline-none focus:border-blue-500"
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-[#64748B] italic text-center py-1">
+                    No timestamped clips annotated on this video yet. Use the form above to mark your first clip!
+                  </p>
+                )}
+              </div>
+
+              {/* Content Creation & Repurposing Notes (Quick Scratchpad) */}
               <div className="p-3 bg-[#131B2E] rounded-xl border border-[#1E293B] space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] uppercase font-bold text-amber-400 tracking-wider">
-                    📝 Editorial Notes &amp; Hook Timestamps
+                    📝 General Video Scratchpad (Local Browser Note)
                   </span>
-                  {drawerNote && <span className="text-[10px] text-emerald-400">Saved</span>}
+                  {drawerNote && <span className="text-[10px] text-emerald-400">Saved locally</span>}
                 </div>
                 <textarea
                   value={drawerNote}
