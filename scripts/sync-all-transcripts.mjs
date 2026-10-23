@@ -52,11 +52,21 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// XML Parser for Google Drive TimedText
+// XML Parser for Google Drive TimedText -> "[mm:ss] text" lines (~8s groups) so search hits can jump to the exact moment
+function fmtTs(totalSec) {
+  const sec = Math.max(0, Math.floor(totalSec));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const r = sec % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
+    : `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+}
+
 function parseTimedTextXml(xml) {
   if (!xml || typeof xml !== 'string') return null;
-  const regex = /<text\s+start="([\d.]+)"\s+dur="([\d.]+)"[^>]*>([\s\S]*?)<\/text>/gi;
-  const parts = [];
+  const regex = /<text\s+start="([\d.]+)"(?:\s+dur="([\d.]+)")?[^>]*>([\s\S]*?)<\/text>/gi;
+  const cues = [];
   let match;
   while ((match = regex.exec(xml)) !== null) {
     const text = match[3]
@@ -65,14 +75,35 @@ function parseTimedTextXml(xml) {
       .replace(/&quot;/g, '"')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
-      .replace(/\n/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim();
-    if (text) {
-      parts.push(text);
+    if (text) cues.push({ start: parseFloat(match[1]), dur: parseFloat(match[2] || '3'), text });
+  }
+  if (!cues.length) return null;
+
+  // Same grouping rules as /api/video-database/transcribe
+  const lines = [];
+  let curStart = cues[0].start;
+  let curEnd = cues[0].start + cues[0].dur;
+  let words = [cues[0].text];
+  const flush = () => lines.push(`[${fmtTs(curStart)}] ${words.join(' ')}`);
+  for (let i = 1; i < cues.length; i++) {
+    const cue = cues[i];
+    const elapsed = cue.start - curStart;
+    const gap = cue.start - curEnd;
+    const endsSentence = /[.?!]$/.test(words[words.length - 1] || '');
+    if (elapsed >= 8 || (elapsed >= 4 && endsSentence) || gap > 1.5) {
+      flush();
+      curStart = cue.start;
+      curEnd = cue.start + cue.dur;
+      words = [cue.text];
+    } else {
+      words.push(cue.text);
+      curEnd = Math.max(curEnd, cue.start + cue.dur);
     }
   }
-  if (!parts.length) return null;
-  return parts.join(' ');
+  flush();
+  return lines.join('\n');
 }
 
 // Sleep helper
@@ -129,17 +160,20 @@ class DriveTokenManager {
 }
 
 // Paginated fetcher for Supabase
+const BACKFILL = process.argv.includes('--backfill');
+
 async function fetchAllPendingVideos(source) {
   let all = [];
   let page = 0;
   const pageSize = 500;
   while (true) {
-    const { data, error } = await supabase
-      .from('recal_videos')
-      .select('id, source_id, title')
-      .eq('source', source)
-      .is('transcript', null)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
+    let q = supabase.from('recal_videos').select('id, source_id, title').eq('source', source);
+    // --backfill: re-fetch existing plain-text transcripts (no [mm:ss] markers) to add timestamps.
+    // Always paginate over a stable order; rows that fail stay untouched.
+    q = BACKFILL
+      ? q.neq('transcript', '').not('transcript', 'is', null).not('transcript', 'like', '[%').order('id')
+      : q.is('transcript', null);
+    const { data, error } = await q.range(page * pageSize, (page + 1) * pageSize - 1);
 
     if (error || !data || data.length === 0) break;
     all = all.concat(data);
@@ -199,6 +233,8 @@ async function syncDriveTranscripts(tokenManager) {
 
         transcribedCount++;
         log(`${prefix} ✓ TRANSCRIBED (${transcriptText.length} chars): "${v.title}"`);
+      } else if (BACKFILL) {
+        log(`${prefix} - No caption track returned, keeping existing transcript: "${v.title}"`);
       } else {
         // Mark as empty string so it indicates checked with no speech
         await supabase

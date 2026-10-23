@@ -67,9 +67,10 @@ export async function GET(request: Request) {
 
     // Search query across title, description, folder_path, and spoken transcript
     if (search.trim()) {
-      const term = `%${search.trim()}%`;
+      // Quote the pattern so commas/parentheses in a search don't break the or() filter
+      const term = `"%${search.trim().replace(/[\\"]/g, '\\$&')}%"`;
       if (searchMode === 'transcript') {
-        query = query.ilike('transcript', term);
+        query = query.ilike('transcript', `%${search.trim()}%`);
       } else if (searchMode === 'metadata') {
         query = query.or(`title.ilike.${term},folder_path.ilike.${term},description.ilike.${term}`);
       } else {
@@ -120,7 +121,7 @@ export async function GET(request: Request) {
       if (isLive === 'true') fallbackQuery = fallbackQuery.eq('is_live', true);
       else if (isLive === 'false') fallbackQuery = fallbackQuery.eq('is_live', false);
       if (search.trim()) {
-        const term = `%${search.trim()}%`;
+        const term = `"%${search.trim().replace(/[\\"]/g, '\\$&')}%"`;
         fallbackQuery = fallbackQuery.or(`title.ilike.${term},folder_path.ilike.${term},description.ilike.${term}`);
       }
       const fallbackRes = await fallbackQuery.order('published_at', { ascending: false }).range(from, to);

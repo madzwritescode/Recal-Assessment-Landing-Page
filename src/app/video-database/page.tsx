@@ -493,10 +493,13 @@ export default function VideoDatabasePage() {
       setTimeout(() => {
         if (record.source === "gdrive" && driveVideoRef.current) {
           driveVideoRef.current.currentTime = ann.start_seconds;
-          driveVideoRef.current.play().catch(() => {});
         } else if (record.source === "youtube" && youtubeIframeRef.current?.contentWindow) {
           youtubeIframeRef.current.contentWindow.postMessage(
             JSON.stringify({ event: "command", func: "seekTo", args: [ann.start_seconds, true] }),
+            "*"
+          );
+          youtubeIframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: "command", func: "pauseVideo", args: [] }),
             "*"
           );
         }
@@ -517,10 +520,13 @@ export default function VideoDatabasePage() {
     setTimeout(() => {
       if (video.source === "gdrive" && driveVideoRef.current) {
         driveVideoRef.current.currentTime = targetSec;
-        driveVideoRef.current.play().catch(() => {});
       } else if (video.source === "youtube" && youtubeIframeRef.current?.contentWindow) {
         youtubeIframeRef.current.contentWindow.postMessage(
           JSON.stringify({ event: "command", func: "seekTo", args: [targetSec, true] }),
+          "*"
+        );
+        youtubeIframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: "command", func: "pauseVideo", args: [] }),
           "*"
         );
       }
@@ -3147,7 +3153,7 @@ export default function VideoDatabasePage() {
                   {selectedVideo.source === "youtube" ? (
                     <iframe
                       ref={youtubeIframeRef}
-                      src={`https://www.youtube.com/embed/${selectedVideo.source_id}?autoplay=1&enablejsapi=1&rel=0${
+                      src={`https://www.youtube.com/embed/${selectedVideo.source_id}?enablejsapi=1&rel=0${
                         youtubeStartSeconds > 0 ? `&start=${youtubeStartSeconds}` : ""
                       }${youtubeEndSeconds && youtubeEndSeconds > youtubeStartSeconds ? `&end=${youtubeEndSeconds}` : ""}`}
                       title={selectedVideo.title}
@@ -3162,8 +3168,14 @@ export default function VideoDatabasePage() {
                       src={`/api/video-database/stream?fileId=${encodeURIComponent(selectedVideo.source_id)}`}
                       poster={selectedVideo.thumbnail_url || undefined}
                       controls
-                      autoPlay
+                      preload="metadata"
                       playsInline
+                      onLoadedMetadata={(e) => {
+                        // Cue to the requested moment (clip / transcript hit) without playing
+                        if (youtubeStartSeconds > 0) {
+                          e.currentTarget.currentTime = youtubeStartSeconds;
+                        }
+                      }}
                       onTimeUpdate={(e) => {
                         const cur = e.currentTarget.currentTime;
                         setPlayerCurrentTime(Math.floor(cur));
