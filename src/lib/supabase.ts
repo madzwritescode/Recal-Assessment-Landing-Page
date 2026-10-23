@@ -13,6 +13,13 @@ export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey, {
   },
 });
 
+export interface TranscriptMatchHit {
+  timestamp_seconds: number;
+  timestamp_formatted: string;
+  is_exact: boolean;
+  snippet: string;
+}
+
 export interface RecalVideoRecord {
   id?: string;
   source: 'youtube' | 'gdrive';
@@ -20,6 +27,9 @@ export interface RecalVideoRecord {
   title: string;
   description?: string | null;
   transcript?: string | null;
+  transcript_match_snippet?: string | null;
+  transcript_matches?: TranscriptMatchHit[];
+  has_transcript?: boolean;
   privacy_status: 'public' | 'unlisted' | 'private' | 'draft';
   is_live: boolean;
   live_broadcast_content?: string | null;

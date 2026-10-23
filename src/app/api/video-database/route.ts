@@ -134,24 +134,88 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Enrich results with transcript highlight snippets
+    function formatSec(totalSec: number): string {
+      const sec = Math.max(0, Math.floor(totalSec));
+      const hrs = Math.floor(sec / 3600);
+      const mins = Math.floor((sec % 3600) / 60);
+      const rem = sec % 60;
+      if (hrs > 0) {
+        return `${hrs}:${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+      }
+      return `${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+    }
+
+    function parseBracketTimestamp(ts: string): number {
+      const parts = ts.split(':').map((n) => parseInt(n, 10));
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+      return 0;
+    }
+
+    // Enrich results with transcript highlight snippets & timestamp hits
     const enrichedVideos = (videos || []).map((v: Record<string, unknown>) => {
       let matchSnippet: string | null = null;
-      if (search.trim() && typeof v.transcript === 'string') {
+      const transcriptMatches: Array<{
+        timestamp_seconds: number;
+        timestamp_formatted: string;
+        is_exact: boolean;
+        snippet: string;
+      }> = [];
+
+      if (search.trim() && typeof v.transcript === 'string' && v.transcript.length > 0) {
+        const rawTranscript = v.transcript;
         const queryTerm = search.trim().toLowerCase();
-        const transcriptLower = v.transcript.toLowerCase();
-        const idx = transcriptLower.indexOf(queryTerm);
-        if (idx !== -1) {
-          const start = Math.max(0, idx - 60);
-          const end = Math.min(v.transcript.length, idx + queryTerm.length + 80);
+        const transcriptLower = rawTranscript.toLowerCase();
+        const durSec = typeof v.duration_seconds === 'number' && v.duration_seconds > 0 ? v.duration_seconds : 0;
+
+        let searchFrom = 0;
+        while (searchFrom < transcriptLower.length && transcriptMatches.length < 5) {
+          const idx = transcriptLower.indexOf(queryTerm, searchFrom);
+          if (idx === -1) break;
+
+          const start = Math.max(0, idx - 55);
+          const end = Math.min(rawTranscript.length, idx + queryTerm.length + 75);
           const prefix = start > 0 ? '...' : '';
-          const suffix = end < v.transcript.length ? '...' : '';
-          matchSnippet = `${prefix}${v.transcript.slice(start, end).trim()}${suffix}`;
+          const suffix = end < rawTranscript.length ? '...' : '';
+          const cleanSlice = rawTranscript
+            .slice(start, end)
+            .replace(/\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          const snippet = `${prefix}${cleanSlice}${suffix}`;
+          if (!matchSnippet) matchSnippet = snippet;
+
+          // Determine timestamp: check for nearest preceding [MM:SS] marker first
+          const beforeText = rawTranscript.slice(0, idx);
+          const tsMatches = [...beforeText.matchAll(/\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g)];
+          let timestampSeconds = 0;
+          let isExact = false;
+
+          if (tsMatches.length > 0) {
+            const lastMarker = tsMatches[tsMatches.length - 1][1];
+            timestampSeconds = parseBracketTimestamp(lastMarker);
+            isExact = true;
+          } else if (durSec > 0) {
+            const ratio = idx / Math.max(1, rawTranscript.length);
+            timestampSeconds = Math.max(0, Math.min(durSec - 1, Math.floor(ratio * durSec)));
+            isExact = false;
+          }
+
+          transcriptMatches.push({
+            timestamp_seconds: timestampSeconds,
+            timestamp_formatted: formatSec(timestampSeconds),
+            is_exact: isExact,
+            snippet,
+          });
+
+          searchFrom = idx + Math.max(queryTerm.length, 30);
         }
       }
+
       return {
         ...v,
         transcript_match_snippet: matchSnippet,
+        transcript_matches: transcriptMatches,
         has_transcript: Boolean(v.transcript),
       };
     });

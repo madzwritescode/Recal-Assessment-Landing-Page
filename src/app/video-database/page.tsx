@@ -140,6 +140,8 @@ export default function VideoDatabasePage() {
 
   // Filters & Search
   const [search, setSearch] = useState<string>("");
+  const searchRef = useRef<string>("");
+  searchRef.current = search;
   const [debouncedSearch, setDebouncedSearch] = useState<string>("");
   const [initialLoading, setInitialLoading] = useState<boolean>(true);
   const [sourceFilter, setSourceFilter] = useState<string>("all");
@@ -503,6 +505,28 @@ export default function VideoDatabasePage() {
     [videos]
   );
 
+  // Open a video from search results and jump to the exact moment a spoken phrase was said
+  const handleOpenVideoAtTime = useCallback((video: RecalVideoRecord, seconds: number) => {
+    const targetSec = Math.max(0, Math.floor(seconds));
+    setSelectedVideo(video);
+    setYoutubeStartSeconds(targetSec);
+    setYoutubeEndSeconds(null);
+    setPlayerCurrentTime(targetSec);
+    setActiveClipRange({ start: targetSec, end: null });
+
+    setTimeout(() => {
+      if (video.source === "gdrive" && driveVideoRef.current) {
+        driveVideoRef.current.currentTime = targetSec;
+        driveVideoRef.current.play().catch(() => {});
+      } else if (video.source === "youtube" && youtubeIframeRef.current?.contentWindow) {
+        youtubeIframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: "command", func: "seekTo", args: [targetSec, true] }),
+          "*"
+        );
+      }
+    }, 450);
+  }, []);
+
   // Create a new timestamped clip annotation
   const handleAddAnnotation = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -859,7 +883,7 @@ export default function VideoDatabasePage() {
     }
     setVidiqTitleScore(null);
     setVidiqSuggestedTitles([]);
-    setTranscriptSearch("");
+    setTranscriptSearch(selectedVideo ? searchRef.current : "");
     setVidiqToolError(null);
     setAnnStartInput("00:00");
     setAnnEndInput("");
@@ -867,6 +891,48 @@ export default function VideoDatabasePage() {
     setAnnError(null);
     setEditingAnnId(null);
   }, [selectedVideo, notesMap]);
+
+  // Wrap every case-insensitive occurrence of `term` in a highlighted <mark>
+  const highlightText = (text: string, term: string) => {
+    const t = term.trim();
+    if (!t) return text;
+    const re = new RegExp(`(${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+    return text.split(re).map((part, i) =>
+      part.toLowerCase() === t.toLowerCase() ? (
+        <mark key={i} className="bg-amber-400/30 text-amber-200 rounded px-0.5">
+          {part}
+        </mark>
+      ) : (
+        part
+      )
+    );
+  };
+
+  const renderTranscriptHits = (video: RecalVideoRecord) => {
+    const hits = video.transcript_matches || [];
+    if (!hits.length) return null;
+    return (
+      <div className="mt-1.5 space-y-1" onClick={(e) => e.stopPropagation()}>
+        {hits.map((hit, idx) => (
+          <button
+            key={`${video.source_id}-hit-${idx}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenVideoAtTime(video, hit.timestamp_seconds);
+            }}
+            className="w-full flex items-start gap-1.5 text-left text-[11px] text-slate-300 hover:text-white bg-[#0B0F17] hover:bg-[#1E293B] border border-[#1E293B] rounded px-1.5 py-1 transition"
+            title={hit.is_exact ? "Jump to this moment" : "Approximate position — estimated from transcript length"}
+          >
+            <span className="shrink-0 font-mono text-[10px] px-1 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              {hit.is_exact ? "" : "~"}
+              {hit.timestamp_formatted}
+            </span>
+            <span className="line-clamp-2">{highlightText(hit.snippet, search)}</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
 
   // Filter videos locally by Orientation, Category, Starred & Annotated
   const displayedVideos = useMemo(() => {
@@ -2002,7 +2068,11 @@ export default function VideoDatabasePage() {
                     return (
                       <tr
                         key={video.source_id}
-                        onClick={() => setSelectedVideo(video)}
+                        onClick={() =>
+                          video.transcript_matches && video.transcript_matches.length > 0
+                            ? handleOpenVideoAtTime(video, video.transcript_matches[0].timestamp_seconds)
+                            : setSelectedVideo(video)
+                        }
                         className="hover:bg-[#1E293B]/50 transition cursor-pointer group"
                       >
                         {/* Star Favorite Button */}
@@ -2063,6 +2133,7 @@ export default function VideoDatabasePage() {
                                 <span className="opacity-75">📍</span>
                                 {video.folder_path || "Recal Media"}
                               </span>
+                              {renderTranscriptHits(video)}
                             </div>
                           </div>
                         </td>
@@ -2216,7 +2287,11 @@ export default function VideoDatabasePage() {
                 return (
                   <div
                     key={video.source_id}
-                    onClick={() => setSelectedVideo(video)}
+                    onClick={() =>
+                          video.transcript_matches && video.transcript_matches.length > 0
+                            ? handleOpenVideoAtTime(video, video.transcript_matches[0].timestamp_seconds)
+                            : setSelectedVideo(video)
+                        }
                     className="bg-[#131B2E] border border-[#1E293B] rounded-xl overflow-hidden shadow-sm hover:border-blue-500/50 hover:shadow-blue-500/10 transition cursor-pointer flex flex-col"
                   >
                     {/* Thumbnail Banner */}
@@ -2279,6 +2354,7 @@ export default function VideoDatabasePage() {
                         <p className="text-xs text-[#64748B] line-clamp-1 mt-1">
                           📍 {video.folder_path || "Recal Marketing"}
                         </p>
+                        {renderTranscriptHits(video)}
                       </div>
 
                       <div className="pt-2 border-t border-[#1E293B] flex items-center justify-between text-xs text-[#94A3B8]">
@@ -3788,8 +3864,31 @@ export default function VideoDatabasePage() {
                       </div>
                     )}
                     <div className="max-h-48 overflow-y-auto p-2.5 bg-[#0B0F17] rounded border border-[#1E293B] text-[11px] text-slate-300 leading-relaxed font-sans select-text whitespace-pre-wrap">
-                      {transcriptSearch
-                        ? vidiqTranscript.split('. ').filter(l => l.toLowerCase().includes(transcriptSearch.toLowerCase())).join('. \n\n') || "No matching segments found."
+                      {/^\[\d{1,2}:\d{2}(?::\d{2})?\]/.test(vidiqTranscript) ? (
+                        (() => {
+                          const lines = vidiqTranscript
+                            .split("\n")
+                            .filter((l) => !transcriptSearch || l.toLowerCase().includes(transcriptSearch.toLowerCase()));
+                          if (!lines.length) return "No matching segments found.";
+                          return lines.map((line, i) => {
+                            const m = line.match(/^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(.*)$/);
+                            if (!m) return <div key={i}>{highlightText(line, transcriptSearch)}</div>;
+                            const parts = m[1].split(":").map((n) => parseInt(n, 10));
+                            const sec = parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
+                            return (
+                              <button
+                                key={i}
+                                onClick={() => seekPlayerTo(sec)}
+                                className="w-full flex items-start gap-2 text-left py-0.5 hover:bg-[#1E293B] rounded px-1 transition"
+                              >
+                                <span className="shrink-0 font-mono text-[10px] text-indigo-300">{m[1]}</span>
+                                <span>{highlightText(m[2], transcriptSearch)}</span>
+                              </button>
+                            );
+                          });
+                        })()
+                      ) : transcriptSearch
+                        ? highlightText(vidiqTranscript.split('. ').filter(l => l.toLowerCase().includes(transcriptSearch.toLowerCase())).join('. \n\n') || "No matching segments found.", transcriptSearch)
                         : vidiqTranscript}
                     </div>
                   </div>
